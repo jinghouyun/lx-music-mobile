@@ -349,6 +349,11 @@ declare global {
       /**
        * 文件命名方式
        */
+      /**
+       * 是否启用下载
+       */
+      'download.enable': boolean
+
       'download.fileName': '歌名 - 歌手' | '歌手 - 歌名' | '歌名'
 
       /**
@@ -372,9 +377,34 @@ declare global {
       'download.isUseOtherSource': boolean
 
       /**
+       * 是否按歌单名分组保存
+       */
+      'download.isSavePathGroupByListName': boolean
+
+      /**
        * 是否嵌入封面到音乐文件
        */
       'download.isEmbedPic': boolean
+
+      /**
+       * 是否嵌入歌词到音乐文件
+       */
+      'download.isEmbedLyric': boolean
+
+      /**
+       * 是否嵌入翻译歌词到音乐文件
+       */
+      'download.isEmbedLyricT': boolean
+
+      /**
+       * 是否嵌入罗马音歌词到音乐文件
+       */
+      'download.isEmbedLyricR': boolean
+
+      /**
+       * 是否嵌入逐字歌词到音乐文件
+       */
+      'download.isEmbedLyricLx': boolean
 
       /**
        * 是否下载歌词文件

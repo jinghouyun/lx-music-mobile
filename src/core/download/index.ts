@@ -260,6 +260,7 @@ const runTask = async(task: DownloadTask) => {
 
 export const createDownloadTask = async(musicInfo: LX.Music.MusicInfoOnline, quality: LX.Quality) => {
   await initDownloadTasks()
+  if (!settingState.setting['download.enable']) return
   const id = genTaskId(musicInfo, quality)
   if (findTask(id)) return
 

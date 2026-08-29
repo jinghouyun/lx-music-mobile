@@ -534,5 +534,12 @@
   "setting_download_path_reset": "恢复默认",
   "setting_download_lrc_format": "歌词文件编码",
   "setting_download_lrc_format_utf8": "UTF-8",
-  "setting_download_lrc_format_gbk": "GBK"
+  "setting_download_lrc_format_gbk": "GBK",
+  "setting_download_enable": "启用下载",
+  "setting_download_save_group_list_name": "按歌单名分组保存",
+  "setting_download_embed_lyric": "嵌入歌词到音乐文件",
+  "setting_download_embed_tlyric": "嵌入翻译歌词",
+  "setting_download_embed_rlyric": "嵌入罗马音歌词",
+  "setting_download_embed_lxlyric": "嵌入逐字歌词",
+  "setting_download_data_embed": "数据嵌入"
 }

@@ -534,5 +534,12 @@
   "setting_download_path_reset": "恢復預設",
   "setting_download_lrc_format": "歌詞檔案編碼",
   "setting_download_lrc_format_utf8": "UTF-8",
-  "setting_download_lrc_format_gbk": "GBK"
+  "setting_download_lrc_format_gbk": "GBK",
+  "setting_download_enable": "啟用下載",
+  "setting_download_save_group_list_name": "按歌單名分組保存",
+  "setting_download_embed_lyric": "嵌入歌詞到音樂檔案",
+  "setting_download_embed_tlyric": "嵌入翻譯歌詞",
+  "setting_download_embed_rlyric": "嵌入羅馬音歌詞",
+  "setting_download_embed_lxlyric": "嵌入逐字歌詞",
+  "setting_download_data_embed": "資料嵌入"
 }

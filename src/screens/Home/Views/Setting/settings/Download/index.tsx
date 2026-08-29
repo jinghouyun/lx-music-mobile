@@ -12,6 +12,18 @@ import { useI18n } from '@/lang'
 import { createStyle } from '@/utils/tools'
 import { appExternalStorageDirectoryPath } from '@/utils/fs'
 
+const EnableSetting = memo(() => {
+  const t = useI18n()
+  const enabled = useSettingValue('download.enable')
+  return (
+    <CheckBoxItem
+      check={enabled}
+      label={t('setting_download_enable')}
+      onChange={v => { updateSetting({ 'download.enable': v }) }}
+    />
+  )
+})
+
 const SavePathSetting = memo(() => {
   const t = useI18n()
   const theme = useTheme()
@@ -111,6 +123,18 @@ const SkipExistSetting = memo(() => {
   )
 })
 
+const SaveGroupByListNameSetting = memo(() => {
+  const t = useI18n()
+  const val = useSettingValue('download.isSavePathGroupByListName')
+  return (
+    <CheckBoxItem
+      check={val}
+      label={t('setting_download_save_group_list_name')}
+      onChange={v => { updateSetting({ 'download.isSavePathGroupByListName': v }) }}
+    />
+  )
+})
+
 const UseOtherSourceSetting = memo(() => {
   const t = useI18n()
   const val = useSettingValue('download.isUseOtherSource')
@@ -132,6 +156,43 @@ const EmbedPicSetting = memo(() => {
       label={t('setting_download_embed_pic')}
       onChange={v => { updateSetting({ 'download.isEmbedPic': v }) }}
     />
+  )
+})
+
+const EmbedLyricSetting = memo(() => {
+  const t = useI18n()
+  const enabled = useSettingValue('download.isEmbedLyric')
+  const tLyric = useSettingValue('download.isEmbedLyricT')
+  const rLyric = useSettingValue('download.isEmbedLyricR')
+  const lxLyric = useSettingValue('download.isEmbedLyricLx')
+  return (
+    <SubTitle title={t('setting_download_data_embed')}>
+      <EmbedPicSetting />
+      <CheckBoxItem
+        check={enabled}
+        label={t('setting_download_embed_lyric')}
+        onChange={v => { updateSetting({ 'download.isEmbedLyric': v }) }}
+      />
+      {enabled ? (
+        <>
+          <CheckBoxItem
+            check={tLyric}
+            label={t('setting_download_embed_tlyric')}
+            onChange={v => { updateSetting({ 'download.isEmbedLyricT': v }) }}
+          />
+          <CheckBoxItem
+            check={rLyric}
+            label={t('setting_download_embed_rlyric')}
+            onChange={v => { updateSetting({ 'download.isEmbedLyricR': v }) }}
+          />
+          <CheckBoxItem
+            check={lxLyric}
+            label={t('setting_download_embed_lxlyric')}
+            onChange={v => { updateSetting({ 'download.isEmbedLyricLx': v }) }}
+          />
+        </>
+      ) : null}
+    </SubTitle>
   )
 })
 
@@ -196,14 +257,16 @@ export default memo(() => {
   const t = useI18n()
   return (
     <Section title={t('setting_download')}>
+      <EnableSetting />
       <SavePathSetting />
       <FileNameSetting />
       <MaxDownloadNumSetting />
       <View style={styles.checkGroup}>
         <SkipExistSetting />
+        <SaveGroupByListNameSetting />
         <UseOtherSourceSetting />
-        <EmbedPicSetting />
       </View>
+      <EmbedLyricSetting />
       <LrcFormatSetting />
       <DownloadLrcSetting />
     </Section>

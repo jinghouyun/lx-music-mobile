@@ -534,5 +534,12 @@
   "setting_download_path_reset": "Reset to default",
   "setting_download_lrc_format": "Lyric file encoding",
   "setting_download_lrc_format_utf8": "UTF-8",
-  "setting_download_lrc_format_gbk": "GBK"
+  "setting_download_lrc_format_gbk": "GBK",
+  "setting_download_enable": "Enable download",
+  "setting_download_save_group_list_name": "Group by list name",
+  "setting_download_embed_lyric": "Embed lyrics into file",
+  "setting_download_embed_tlyric": "Embed translation lyrics",
+  "setting_download_embed_rlyric": "Embed romaji lyrics",
+  "setting_download_embed_lxlyric": "Embed word-by-word lyrics",
+  "setting_download_data_embed": "Data embedding"
 }
