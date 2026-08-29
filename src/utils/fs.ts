@@ -20,6 +20,7 @@ export const extname = (name: string) => name.lastIndexOf('.') > 0 ? name.substr
 export const temporaryDirectoryPath = Dirs.CacheDir
 export const externalStorageDirectoryPath = Dirs.SDCardDir
 export const privateStorageDirectoryPath = Dirs.DocumentDir
+export const appExternalStorageDirectoryPath = RNFS.ExternalDirectoryPath
 
 export const getExternalStoragePaths = async(is_removable?: boolean) => _getExternalStoragePaths(is_removable)
 
@@ -36,6 +37,16 @@ export const readDir = async(path: string) => FileSystem.ls(path)
 export const unlink = async(path: string) => FileSystem.unlink(path)
 
 export const mkdir = async(path: string) => FileSystem.mkdir(path)
+export const mkdirp = async(path: string) => {
+  const parts = path.split("/").filter(Boolean)
+  let current = ""
+  for (const part of parts) {
+    current += "/" + part
+    if (!await FileSystem.exists(current)) {
+      try { await FileSystem.mkdir(current) } catch { /* 可能已被其他进程创建 */ }
+    }
+  }
+}
 
 export const stat = async(path: string) => FileSystem.stat(path)
 export const hash = async(path: string, algorithm: HashAlgorithm) => FileSystem.hash(path, algorithm)

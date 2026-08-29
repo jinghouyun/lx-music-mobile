@@ -1,14 +1,56 @@
-import { memo } from 'react'
+import { memo, useRef } from 'react'
 import { View, TouchableOpacity } from 'react-native'
 import Section from '../../components/Section'
 import SubTitle from '../../components/SubTitle'
 import CheckBoxItem from '../../components/CheckBoxItem'
 import Text from '@/components/common/Text'
+import FileSelect, { type FileSelectType } from '@/components/common/FileSelect'
 import { useSettingValue } from '@/store/setting/hook'
 import { updateSetting } from '@/core/common'
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
 import { createStyle } from '@/utils/tools'
+import { appExternalStorageDirectoryPath } from '@/utils/fs'
+
+const SavePathSetting = memo(() => {
+  const t = useI18n()
+  const theme = useTheme()
+  const savePath = useSettingValue('download.savePath')
+  const fileSelectRef = useRef<FileSelectType>(null)
+  const displayPath = savePath || `${appExternalStorageDirectoryPath}/Music/LXMusic`
+
+  const handleSelectPath = () => {
+    fileSelectRef.current?.show({
+      title: t('setting_download_path'),
+      dirOnly: true,
+    }, (path) => {
+      updateSetting({ 'download.savePath': path })
+    })
+  }
+
+  const handleResetPath = () => {
+    updateSetting({ 'download.savePath': '' })
+  }
+
+  return (
+    <SubTitle title={t('setting_download_path')}>
+      <View style={styles.pathContainer}>
+        <Text size={12} color={theme['c-font-secondary']} style={styles.pathText} numberOfLines={2}>{displayPath}</Text>
+        <View style={styles.pathBtns}>
+          <TouchableOpacity onPress={handleSelectPath} style={[styles.pathBtn, { borderColor: theme['c-primary'] }]}>
+            <Text size={12} color={theme['c-primary']}>{t('setting_download_path_select')}</Text>
+          </TouchableOpacity>
+          {savePath ? (
+            <TouchableOpacity onPress={handleResetPath} style={[styles.pathBtn, { borderColor: theme['c-border-background'] }]}>
+              <Text size={12} color={theme['c-font-secondary']}>{t('setting_download_path_reset')}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+      <FileSelect ref={fileSelectRef} />
+    </SubTitle>
+  )
+})
 
 const FileNameSetting = memo(() => {
   const t = useI18n()
@@ -93,6 +135,27 @@ const EmbedPicSetting = memo(() => {
   )
 })
 
+const LrcFormatSetting = memo(() => {
+  const t = useI18n()
+  const format = useSettingValue('download.lrcFormat')
+  const options = [
+    { value: 'utf8', label: t('setting_download_lrc_format_utf8') },
+    { value: 'gbk', label: t('setting_download_lrc_format_gbk') },
+  ]
+  return (
+    <SubTitle title={t('setting_download_lrc_format')}>
+      {options.map(opt => (
+        <CheckBoxItem
+          key={opt.value}
+          check={format === opt.value}
+          label={opt.label}
+          onChange={() => { updateSetting({ 'download.lrcFormat': opt.value as 'utf8' | 'gbk' }) }}
+        />
+      ))}
+    </SubTitle>
+  )
+})
+
 const DownloadLrcSetting = memo(() => {
   const t = useI18n()
   const enabled = useSettingValue('download.isDownloadLrc')
@@ -133,6 +196,7 @@ export default memo(() => {
   const t = useI18n()
   return (
     <Section title={t('setting_download')}>
+      <SavePathSetting />
       <FileNameSetting />
       <MaxDownloadNumSetting />
       <View style={styles.checkGroup}>
@@ -140,6 +204,7 @@ export default memo(() => {
         <UseOtherSourceSetting />
         <EmbedPicSetting />
       </View>
+      <LrcFormatSetting />
       <DownloadLrcSetting />
     </Section>
   )
@@ -163,5 +228,25 @@ const styles = createStyle({
   },
   checkGroup: {
     marginBottom: 10,
+  },
+  pathContainer: {
+    paddingLeft: 15,
+    paddingRight: 15,
+    marginBottom: 10,
+  },
+  pathText: {
+    marginBottom: 8,
+  },
+  pathBtns: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pathBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 })

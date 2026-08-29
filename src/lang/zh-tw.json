@@ -528,5 +528,11 @@
   "version_title_latest": "🎉 目前版本已是最新 🎊",
   "version_title_new": "🌟 發現新版本 🌟",
   "version_title_unknown": "❓ 獲取最新版本資訊失敗 ❓",
-  "version_title_update": "🚀 軟體更新 🚀"
+  "version_title_update": "🚀 軟體更新 🚀",
+  "setting_download_path": "下載路徑",
+  "setting_download_path_select": "選擇路徑",
+  "setting_download_path_reset": "恢復預設",
+  "setting_download_lrc_format": "歌詞檔案編碼",
+  "setting_download_lrc_format_utf8": "UTF-8",
+  "setting_download_lrc_format_gbk": "GBK"
 }

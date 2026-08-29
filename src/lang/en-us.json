@@ -528,5 +528,11 @@
   "version_title_latest": "🎉 The current version is already the latest 🎊",
   "version_title_new": "🌟 New version found 🌟",
   "version_title_unknown": "❓ Failed to get the latest version information ❓",
-  "version_title_update": "🚀 App update 🚀"
+  "version_title_update": "🚀 App update 🚀",
+  "setting_download_path": "Download path",
+  "setting_download_path_select": "Select path",
+  "setting_download_path_reset": "Reset to default",
+  "setting_download_lrc_format": "Lyric file encoding",
+  "setting_download_lrc_format_utf8": "UTF-8",
+  "setting_download_lrc_format_gbk": "GBK"
 }

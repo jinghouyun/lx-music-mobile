@@ -1,4 +1,4 @@
-import { downloadFile, stopDownload, existsFile, mkdir, externalStorageDirectoryPath, writeFile } from '@/utils/fs'
+import { downloadFile, stopDownload, existsFile, mkdirp, appExternalStorageDirectoryPath, writeFile } from '@/utils/fs'
 import { getMusicUrl, getLyricInfo } from '@/core/music/online'
 import settingState from '@/store/setting/state'
 import { QUALITYS } from '@/utils/musicSdk/utils'
@@ -89,8 +89,8 @@ export const getDownloadTasks = () => [...tasks]
 
 const getDownloadDir = async() => {
   const configured = settingState.setting['download.savePath']
-  const dir = configured || `${externalStorageDirectoryPath}/Music/LXMusic`
-  if (!await existsFile(dir)) await mkdir(dir)
+  const dir = configured || `${appExternalStorageDirectoryPath}/Music/LXMusic`
+  if (!await existsFile(dir)) await mkdirp(dir)
   return dir
 }
 
