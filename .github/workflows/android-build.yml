@@ -28,6 +28,20 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: 创建签名配置
+        run: |
+          keytool -genkeypair -v -storetype PKCS12 \
+            -keystore android/app/debug.keystore \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Debug, OU=Debug, O=Debug, L=Debug, ST=Debug, C=US"
+          cat > android/keystore.properties << 'EOF'
+          storeFile=debug.keystore
+          storePassword=android
+          keyAlias=androiddebugkey
+          keyPassword=android
+          EOF
+
       - name: 赋予 gradlew 执行权限
         run: chmod +x android/gradlew
 
