@@ -16,8 +16,6 @@ import {
 } from '@/core/download'
 import { useI18n } from '@/lang'
 import { Icon } from '@/components/common/Icon'
-import { useSettingValue } from '@/store/setting/hook'
-import { appExternalStorageDirectoryPath } from '@/utils/fs'
 
 type TaskItem = DownloadTask
 type TaskAction = 'start' | 'pause' | 'retry' | 'remove'
@@ -115,8 +113,6 @@ export default () => {
   const theme = useTheme()
   const t = useI18n()
   const [tasks, setTasks] = useState<DownloadTask[]>([])
-  const savePath = useSettingValue('download.savePath')
-  const displayPath = savePath || `${appExternalStorageDirectoryPath}/Music/LXMusic`
 
   useEffect(() => {
     const unsub = onDownloadListChange(setTasks)
@@ -191,10 +187,6 @@ export default () => {
           </TouchableOpacity>
         </View>
       </View>
-      <View style={[styles.pathBar, { backgroundColor: theme['c-primary-background-active'] }]}>
-        <Icon name="folder" size={14} color={theme['c-font-label']} />
-        <Text size={11} color={theme['c-font-label']} style={styles.pathText} numberOfLines={1}>{displayPath}</Text>
-      </View>
       <FlatList
         data={tasks}
         renderItem={renderItem}
@@ -220,17 +212,6 @@ const styles = createStyle({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderBottomWidth: 0.5,
-  },
-  pathBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderBottomWidth: 0.5,
-    gap: 6,
-  },
-  pathText: {
-    flex: 1,
   },
   toolbarActions: {
     flexDirection: 'row',
