@@ -1,10 +1,10 @@
 import { useRef, forwardRef, useImperativeHandle } from 'react'
 import { View } from 'react-native'
-// import LoadingMask, { LoadingMaskType } from '@/components/common/LoadingMask'
 import List, { type ListProps, type ListType, type Status, type RowInfoType } from './List'
 import ListMenu, { type ListMenuType, type Position, type SelectInfo } from './ListMenu'
 import ListMusicMultiAdd, { type MusicMultiAddModalType as ListAddMultiType } from '@/components/MusicMultiAddModal'
 import ListMusicAdd, { type MusicAddModalType as ListMusicAddType } from '@/components/MusicAddModal'
+import DownloadModal, { type DownloadModalType } from '@/components/common/DownloadModal'
 import MultipleModeBar, { type MultipleModeBarType, type SelectMode } from './MultipleModeBar'
 import { handleDislikeMusic, handlePlay, handlePlayLater, handleShare, handleShowMusicSourceDetail } from './listAction'
 import { createStyle } from '@/utils/tools'
@@ -37,7 +37,7 @@ export default forwardRef<OnlineListType, OnlineListProps>(({
   const listMusicAddRef = useRef<ListMusicAddType>(null)
   const listMusicMultiAddRef = useRef<ListAddMultiType>(null)
   const listMenuRef = useRef<ListMenuType>(null)
-  // const loadingMaskRef = useRef<LoadingMaskType>(null)
+  const downloadModalRef = useRef<DownloadModalType>(null)
 
   useImperativeHandle(ref, () => ({
     setList(list, isAppend = false, showSource = false) {
@@ -77,6 +77,9 @@ export default forwardRef<OnlineListType, OnlineListProps>(({
       listMusicAddRef.current?.show({ musicInfo: info.musicInfo, listId: '', isMove: false })
     }
   }
+  const handleDownload = (info: SelectInfo) => {
+    downloadModalRef.current?.show(info.musicInfo)
+  }
 
   return (
     <View style={styles.container}>
@@ -103,16 +106,17 @@ export default forwardRef<OnlineListType, OnlineListProps>(({
       </View>
       <ListMusicAdd ref={listMusicAddRef} onAdded={() => { hancelExitSelect() }} />
       <ListMusicMultiAdd ref={listMusicMultiAddRef} onAdded={() => { hancelExitSelect() }} />
+      <DownloadModal ref={downloadModalRef} />
       <ListMenu
         ref={listMenuRef}
         onPlay={info => { handlePlay(info.musicInfo) }}
         onPlayLater={info => { hancelExitSelect(); handlePlayLater(info.musicInfo, info.selectedList, hancelExitSelect) }}
         onCopyName={info => { handleShare(info.musicInfo) }}
         onAdd={handleAddMusic}
+        onDownload={handleDownload}
         onMusicSourceDetail={info => { void handleShowMusicSourceDetail(info.musicInfo) }}
         onDislikeMusic={info => { void handleDislikeMusic(info.musicInfo) }}
       />
-      {/* <LoadingMask ref={loadingMaskRef} /> */}
     </View>
   )
 })
@@ -130,4 +134,3 @@ const styles = createStyle({
     height: 40,
   },
 })
-

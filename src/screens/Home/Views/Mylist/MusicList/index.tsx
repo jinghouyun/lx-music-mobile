@@ -6,6 +6,7 @@ import { handleDislikeMusic, handlePlay, handlePlayLater, handleRemove, handleSh
 import List, { type ListType } from './List'
 import ListMusicAdd, { type MusicAddModalType as ListMusicAddType } from '@/components/MusicAddModal'
 import ListMusicMultiAdd, { type MusicMultiAddModalType as ListAddMultiType } from '@/components/MusicMultiAddModal'
+import DownloadModal, { type DownloadModalType } from '@/components/common/DownloadModal'
 import { createStyle } from '@/utils/tools'
 import { type LayoutChangeEvent, View } from 'react-native'
 import ActiveList, { type ActiveListType } from './ActiveList'
@@ -18,7 +19,6 @@ import MusicToggleModal, { type MusicToggleModalType } from './MusicToggleModal'
 
 
 export default () => {
-  // const t = useI18n()
   const activeListRef = useRef<ActiveListType>(null)
   const listMusicSearchRef = useRef<ListMusicSearchType>(null)
   const listRef = useRef<ListType>(null)
@@ -30,11 +30,11 @@ export default () => {
   const metadataEditTypeRef = useRef<MetadataEditType>(null)
   const listMenuRef = useRef<ListMenuType>(null)
   const musicToggleModalRef = useRef<MusicToggleModalType>(null)
+  const downloadModalRef = useRef<DownloadModalType>(null)
   const layoutHeightRef = useRef<number>(0)
   const isShowMultipleModeBar = useRef(false)
   const isShowSearchBarModeBar = useRef(false)
   const selectedInfoRef = useRef<SelectInfo>()
-  // console.log('render index list')
 
   const hancelMultiSelect = useCallback(() => {
     if (isShowSearchBarModeBar.current) {
@@ -48,7 +48,6 @@ export default () => {
     if (isShowSearchBarModeBar.current) {
       multipleModeBarRef.current?.setVisibleBar(true)
     } else activeListRef.current?.setVisibleBar(true)
-    // console.log('hancelExitSelect', isShowSearchBarModeBar.current)
     multipleModeBarRef.current?.exitSelectMode()
     listRef.current?.setIsMultiSelectMode(false)
     isShowMultipleModeBar.current = false
@@ -81,7 +80,6 @@ export default () => {
     isShowSearchBarModeBar.current = false
     listMusicSearchRef.current?.hide()
     listSearchBarRef.current?.hide()
-    // console.log('handleExitSearch', isShowMultipleModeBar.current)
     if (isShowMultipleModeBar.current) {
       multipleModeBarRef.current?.setVisibleBar(true)
     } else activeListRef.current?.setVisibleBar(true)
@@ -117,6 +115,10 @@ export default () => {
     if (!selectedInfoRef.current || selectedInfoRef.current.musicInfo.source != 'local') return
     handleUpdateMusicInfo(selectedInfoRef.current.listId, selectedInfoRef.current.musicInfo, info)
   }, [])
+  const handleDownload = useCallback((info: SelectInfo) => {
+    if (info.musicInfo.source == 'local') return
+    downloadModalRef.current?.show(info.musicInfo)
+  }, [])
 
 
   return (
@@ -149,6 +151,7 @@ export default () => {
       </View>
       <ListMusicAdd ref={listMusicAddRef} onAdded={hancelExitSelect} />
       <ListMusicMultiAdd ref={listMusicMultiAddRef} onAdded={hancelExitSelect} />
+      <DownloadModal ref={downloadModalRef} />
       <MusicPositionModal ref={musicPositionModalRef}
         onUpdatePosition={(info, postion) => { handleUpdateMusicPosition(postion, info.listId, info.musicInfo, info.selectedList, hancelExitSelect) }} />
       <ListMenu
@@ -161,6 +164,7 @@ export default () => {
         onMusicSourceDetail={info => { void handleShowMusicSourceDetail(info.musicInfo) }}
         onAdd={handleAddMusic}
         onMove={handleMoveMusic}
+        onDownload={handleDownload}
         onEditMetadata={handleEditMetadata}
         onChangePosition={info => musicPositionModalRef.current?.show(info)}
         onToggleSource={info => musicToggleModalRef.current?.show(info)}

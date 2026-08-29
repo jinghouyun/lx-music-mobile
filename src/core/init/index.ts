@@ -8,6 +8,7 @@ import dataInit from './dataInit'
 import initSync from './sync'
 import initCommonState from './common'
 import { initDeeplink } from './deeplink'
+import { initDownloadTasks } from '@/core/download'
 import { setApiSource } from '@/core/apiSource'
 import commonActions from '@/store/common/action'
 import settingState from '@/store/setting/state'
@@ -38,7 +39,6 @@ export default async() => {
   bootLog('Font size changed.')
   const setting = await initSetting()
   bootLog('Setting inited.')
-  // console.log(setting)
 
   await initTheme(setting)
   bootLog('Theme inited.')
@@ -60,10 +60,11 @@ export default async() => {
   await initCommonState(setting)
   bootLog('Common State inited.')
 
+  void initDownloadTasks()
+  bootLog('Download tasks inited.')
+
   void initSync(setting)
   bootLog('Sync inited.')
-
-  // syncSetting()
 
   isInited ||= true
 

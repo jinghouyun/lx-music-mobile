@@ -352,6 +352,56 @@ declare global {
       'download.fileName': '歌名 - 歌手' | '歌手 - 歌名' | '歌名'
 
       /**
+       * 下载保存路径
+       */
+      'download.savePath': string
+
+      /**
+       * 最大同时下载数
+       */
+      'download.maxDownloadNum': number
+
+      /**
+       * 跳过已存在的文件
+       */
+      'download.skipExistFile': boolean
+
+      /**
+       * 下载时尝试使用其他源
+       */
+      'download.isUseOtherSource': boolean
+
+      /**
+       * 是否嵌入封面到音乐文件
+       */
+      'download.isEmbedPic': boolean
+
+      /**
+       * 是否下载歌词文件
+       */
+      'download.isDownloadLrc': boolean
+
+      /**
+       * 是否下载翻译歌词
+       */
+      'download.isDownloadTLrc': boolean
+
+      /**
+       * 是否下载罗马音歌词
+       */
+      'download.isDownloadRLrc': boolean
+
+      /**
+       * 是否下载逐字歌词
+       */
+      'download.isDownloadLxLrc': boolean
+
+      /**
+       * 歌词文件编码格式
+       */
+      'download.lrcFormat': 'utf8' | 'gbk'
+
+      /**
        * 是否启用同步
        */
       'sync.enable': boolean
