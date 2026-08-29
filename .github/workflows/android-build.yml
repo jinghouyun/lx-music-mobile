@@ -28,29 +28,15 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 删除旧密钥并生成新签名
-        run: |
-          rm -f android/app/debug.keystore
-          keytool -genkeypair -v -storetype PKCS12 -keystore android/app/debug.keystore \
-            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=Debug, OU=Debug, O=Debug, L=Debug, ST=Debug, C=US"
-
       - name: 赋予 gradlew 执行权限
         run: chmod +x android/gradlew
 
-      - name: 构建 Release APK
-        run: |
-          cd android
-          ./gradlew assembleRelease \
-            -Prelease.keystore=app/debug.keystore \
-            -Prelease.keystore.password=android \
-            -Prelease.key.alias=androiddebugkey \
-            -Prelease.key.password=android
+      - name: 构建 Debug APK
+        run: cd android && ./gradlew assembleDebug
 
       - name: 上传 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: android/app/build/outputs/apk/release/*.apk
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
