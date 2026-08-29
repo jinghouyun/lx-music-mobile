@@ -40,12 +40,12 @@ jobs:
       - name: 赋予 gradlew 执行权限
         run: chmod +x android/gradlew
 
-      - name: 构建 Debug APK
-        run: cd android && ./gradlew assembleDebug
+      - name: 构建 Release APK
+        run: cd android && ./gradlew assembleRelease
 
       - name: 上传 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: app-release
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 30
