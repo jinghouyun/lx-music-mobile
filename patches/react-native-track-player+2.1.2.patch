@@ -128,7 +128,7 @@ index 7f3773b..5ed6b44 100644
  
      @Override
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
-index e185728..8bc3cdd 100644
+index e185728..26bde77 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
 @@ -16,9 +16,11 @@ import android.graphics.drawable.Drawable;
@@ -190,7 +190,7 @@ index e185728..8bc3cdd 100644
          builder.setLargeIcon(bitmap);
  
          session.setMetadata(metadata.build());
-@@ -222,10 +243,47 @@ public class MetadataManager {
+@@ -222,10 +243,44 @@ public class MetadataManager {
        if (data.containsKey("lyric")) {
          prevMetadata.putString("android.media.metadata.LYRICS", data.getString("lyric"));
        }
@@ -211,7 +211,6 @@ index e185728..8bc3cdd 100644
 +    @SuppressWarnings("unchecked")
 +    public void updateSessionQueue(Object rawItems, String currentMusicId) {
 +      List<QueueItem> queueItems = new ArrayList<>();
-+      long activeQueueId = QueueItem.UNKNOWN_ID;
 +      List<Bundle> items = rawItems instanceof List ? (List<Bundle>) rawItems : null;
 +      if (items != null) {
 +        for (int i = 0; i < items.size(); i++) {
@@ -227,12 +226,10 @@ index e185728..8bc3cdd 100644
 +              .setSubtitle(artist);
 +          if (artwork != null && !artwork.isEmpty()) descBuilder.setIconUri(Uri.parse(artwork));
 +          queueItems.add(new QueueItem(descBuilder.build(), i));
-+          if (currentMusicId != null && currentMusicId.equals(musicId)) activeQueueId = i;
 +        }
 +      }
 +      session.setQueue(queueItems.isEmpty() ? null : queueItems);
 +      session.setQueueTitle("播放列表");
-+      if (activeQueueId != QueueItem.UNKNOWN_ID) session.setActiveQueueItemId(activeQueueId);
 +    }
 +
      /**
