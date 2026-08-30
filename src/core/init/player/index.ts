@@ -7,6 +7,7 @@ import initPlayProgress from './playProgress'
 import initPreloadNextMusic from './preloadNextMusic'
 import initLyric from './lyric'
 import initSessionQueue from './sessionQueue'
+import initVivoLists from './vivoLists'
 
 export default async(setting: LX.AppSetting) => {
   await initPlayer(setting)
@@ -18,4 +19,5 @@ export default async(setting: LX.AppSetting) => {
   initPlayProgress()
   initPreloadNextMusic()
   initSessionQueue()
+  initVivoLists()
 }

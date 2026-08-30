@@ -7,6 +7,7 @@ import { isTempId, isEmpty } from './utils'
 import { exitApp } from '@/core/common'
 import { getCurrentTrackId } from './playList'
 import { pause, play, playNext, playPrev, playList } from '@/core/player/player'
+import { handleVivoBrowserPlay } from '@/core/player/vivoPlay'
 import playerState from '@/store/player/state'
 
 let isInitialized = false
@@ -55,6 +56,10 @@ const registerPlaybackService = async() => {
     const listId = playerState.playInfo.playerListId
     if (listId == null || typeof index != 'number' || index < 0) return
     void playList(listId, index)
+  })
+  // 原子随身听“本地音乐”浏览树（播放列表/收藏列表/下载列表）点歌
+  TrackPlayer.addEventListener(TPEvent.RemotePlayId, ({ id }: { id: string }) => {
+    void handleVivoBrowserPlay(id)
   })
 
   TrackPlayer.addEventListener(TPEvent.RemoteStop, () => {

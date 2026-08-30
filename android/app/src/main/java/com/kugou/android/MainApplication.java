@@ -14,6 +14,7 @@ import com.kugou.android.crypto.CryptoPackage;
 import com.kugou.android.lyric.LyricPackage;
 import com.kugou.android.userApi.UserApiPackage;
 import com.kugou.android.utils.UtilsPackage;
+import com.kugou.android.vivo.VivoListPackage;
 
 public class MainApplication extends NavigationApplication {
 
@@ -35,6 +36,7 @@ public class MainApplication extends NavigationApplication {
           packages.add(new UtilsPackage());
           packages.add(new CryptoPackage());
           packages.add(new UserApiPackage());
+          packages.add(new VivoListPackage());
           return packages;
         }
 

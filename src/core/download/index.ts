@@ -73,6 +73,8 @@ export const initDownloadTasks = async() => {
         tasks.push(task)
       }
       notify()
+      // 恢复完成后通知外部（原子随身听下载列表）同步
+      global.app_event.downloadListUpdate()
     }
   } catch (err) {
     console.error('init download tasks failed', err)
@@ -282,6 +284,8 @@ export const createDownloadTask = async(musicInfo: LX.Music.MusicInfoOnline, qua
   tasks.push(task)
   notify()
   scheduleSave()
+  // 通知外部（原子随身听下载列表）刷新
+  global.app_event.downloadListUpdate()
   checkStartTasks()
 }
 
@@ -333,6 +337,8 @@ export const removeDownloadTasks = async(ids: string[]) => {
   }
   notify()
   scheduleSave()
+  // 通知外部（原子随身听下载列表）刷新
+  global.app_event.downloadListUpdate()
   checkStartTasks()
 }
 

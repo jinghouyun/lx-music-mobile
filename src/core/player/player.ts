@@ -295,6 +295,20 @@ export const playList = async(listId: string, index: number) => {
   await handlePlay()
 }
 
+/**
+ * 临时播放一首列表外的歌曲（原子随身听下载列表点歌）
+ * @param musicInfo 歌曲信息
+ */
+export const playMusicInfo = async(musicInfo: LX.Music.MusicInfo) => {
+  if (!musicInfo) return
+  const prevListId = playerState.playInfo.playerListId
+  setPlayListId(null)
+  setPlayMusicInfo(null, musicInfo, true)
+  if (settingState.setting['player.isAutoCleanPlayedList'] || prevListId != null) clearPlayedList()
+  clearTempPlayeList()
+  await handlePlay()
+}
+
 const handleToggleStop = async() => {
   await stop()
   setTimeout(() => {

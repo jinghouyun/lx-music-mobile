@@ -192,6 +192,8 @@ dependencies {
     // implementation "androidx.javascriptengine:javascriptengine:1.0.0-alpha07"
     // implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation 'wang.harlon.quickjs:wrapper-android:2.4.0'
+    // vivo 原子随身听 MediaBrowserService 浏览树依赖（RNTP 以 implementation 引入，不向 app 传递，这里显式声明）
+    implementation 'androidx.media:media:1.1.0'
 
   if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

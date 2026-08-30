@@ -37,6 +37,53 @@ index 020d049..6b6c8f1 100644
      @ReactMethod
      public void removeUpcomingTracks(final Promise callback) {
          waitForConnection(() -> {
+diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MediaSessionHolder.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MediaSessionHolder.java
+new file mode 100644
+index 0000000..d1179df
+--- /dev/null
++++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MediaSessionHolder.java
+@@ -0,0 +1,41 @@
++package com.guichaguri.trackplayer.service;
++
++import android.support.v4.media.session.MediaSessionCompat;
++
++import java.util.concurrent.CopyOnWriteArrayList;
++
++/**
++ * 持有 RNTP 播放服务的 MediaSession token，
++ * 供 app 侧的 VivoMediaBrowserService 共享同一会话（原子随身听点歌/控制）。
++ */
++public class MediaSessionHolder {
++    private static MediaSessionCompat.Token token;
++    private static final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
++
++    public interface Listener {
++        void onToken(MediaSessionCompat.Token token);
++    }
++
++    public static synchronized void setToken(MediaSessionCompat.Token t) {
++        token = t;
++        for (Listener listener : listeners) listener.onToken(t);
++    }
++
++    public static synchronized MediaSessionCompat.Token getToken() {
++        return token;
++    }
++
++    public static void addListener(Listener listener) {
++        if (listener == null) return;
++        listeners.addIfAbsent(listener);
++        MediaSessionCompat.Token t;
++        synchronized (MediaSessionHolder.class) {
++            t = token;
++        }
++        if (t != null) listener.onToken(t);
++    }
++
++    public static void removeListener(Listener listener) {
++        listeners.remove(listener);
++    }
++}
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MusicBinder.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MusicBinder.java
 index f41035a..fb33dc6 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MusicBinder.java
@@ -81,7 +128,7 @@ index 7f3773b..5ed6b44 100644
  
      @Override
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
-index e185728..d0f76be 100644
+index e185728..8bc3cdd 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
 @@ -16,9 +16,11 @@ import android.graphics.drawable.Drawable;
@@ -96,7 +143,24 @@ index e185728..d0f76be 100644
  import android.support.v4.media.session.PlaybackStateCompat;
  
  import androidx.annotation.NonNull;
-@@ -99,6 +101,14 @@ public class MetadataManager {
+@@ -35,6 +37,7 @@ import com.bumptech.glide.request.target.CustomTarget;
+ import com.bumptech.glide.request.transition.Transition;
+ import com.facebook.react.views.imagehelper.ResourceDrawableIdHelper;
+ import com.guichaguri.trackplayer.R;
++import com.guichaguri.trackplayer.service.MediaSessionHolder;
+ import com.guichaguri.trackplayer.service.MusicManager;
+ import com.guichaguri.trackplayer.service.MusicService;
+ import com.guichaguri.trackplayer.service.Utils;
+@@ -79,6 +82,8 @@ public class MetadataManager {
+ 
+         session.setFlags(MediaSessionCompat.FLAG_HANDLES_QUEUE_COMMANDS);
+         session.setCallback(new ButtonEvents(service, manager));
++        // 共享 MediaSession token 给 vivo 原子随身听浏览服务（VivoMediaBrowserService）
++        MediaSessionHolder.setToken(session.getSessionToken());
+ 
+         Context context = service.getApplicationContext();
+         String packageName = context.getPackageName();
+@@ -99,6 +104,14 @@ public class MetadataManager {
  
          builder.setContentIntent(PendingIntent.getActivity(context, 0, openApp, PendingIntent.FLAG_CANCEL_CURRENT));
  
@@ -111,7 +175,7 @@ index e185728..d0f76be 100644
          builder.setSmallIcon(R.drawable.play);
          builder.setCategory(NotificationCompat.CATEGORY_TRANSPORT);
  
-@@ -202,6 +212,14 @@ public class MetadataManager {
+@@ -202,6 +215,14 @@ public class MetadataManager {
          MediaMetadataCompat.Builder metadata = track.toMediaMetadata();
  
          metadata.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap);
@@ -126,7 +190,7 @@ index e185728..d0f76be 100644
          builder.setLargeIcon(bitmap);
  
          session.setMetadata(metadata.build());
-@@ -222,10 +240,47 @@ public class MetadataManager {
+@@ -222,10 +243,47 @@ public class MetadataManager {
        if (data.containsKey("lyric")) {
          prevMetadata.putString("android.media.metadata.LYRICS", data.getString("lyric"));
        }
