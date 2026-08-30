@@ -6,7 +6,8 @@ import { isTempId, isEmpty } from './utils'
 // import { play as lrcPlay, pause as lrcPause } from '@/core/lyric'
 import { exitApp } from '@/core/common'
 import { getCurrentTrackId } from './playList'
-import { pause, play, playNext, playPrev } from '@/core/player/player'
+import { pause, play, playNext, playPrev, playList } from '@/core/player/player'
+import playerState from '@/store/player/state'
 
 let isInitialized = false
 
@@ -46,6 +47,13 @@ const registerPlaybackService = async() => {
   TrackPlayer.addEventListener(TPEvent.RemotePrevious, () => {
     // console.log('remote-previous')
     void playPrev()
+  })
+
+  // 原子随身听/系统媒体“播放列表”里点歌：按当前列表下标切歌
+  TrackPlayer.addEventListener(TPEvent.RemoteQueueItem, async({ index }: { index: number }) => {
+    const listId = playerState.playInfo.playerListId
+    if (listId == null || typeof index != 'number' || index < 0) return
+    void playList(listId, index)
   })
 
   TrackPlayer.addEventListener(TPEvent.RemoteStop, () => {

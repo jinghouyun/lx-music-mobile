@@ -1,8 +1,117 @@
+diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/module/MusicEvents.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/module/MusicEvents.java
+index 95db8b0..7dd82db 100644
+--- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/module/MusicEvents.java
++++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/module/MusicEvents.java
+@@ -21,6 +21,7 @@ public class MusicEvents extends BroadcastReceiver {
+     public static final String BUTTON_PAUSE = "remote-pause";
+     public static final String BUTTON_STOP = "remote-stop";
+     public static final String BUTTON_SKIP = "remote-skip";
++    public static final String BUTTON_QUEUE_ITEM = "remote-queue-item";
+     public static final String BUTTON_SKIP_NEXT = "remote-next";
+     public static final String BUTTON_SKIP_PREVIOUS = "remote-previous";
+     public static final String BUTTON_SEEK_TO = "remote-seek";
+diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/module/MusicModule.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/module/MusicModule.java
+index 020d049..6b6c8f1 100644
+--- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/module/MusicModule.java
++++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/module/MusicModule.java
+@@ -320,6 +320,22 @@ public class MusicModule extends ReactContextBaseJavaModule implements ServiceCo
+       });
+     }
+ 
++    // 下发当前播放队列给系统 MediaSession（原子随身听“播放列表”按钮）
++    @ReactMethod
++    public void updateSessionQueue(ReadableArray items, String currentMusicId, final Promise callback) {
++      final List<Bundle> list = new ArrayList<>();
++      if (items != null) {
++        for (int i = 0; i < items.size(); i++) {
++          ReadableMap map = items.getMap(i);
++          if (map != null) list.add(Arguments.toBundle(map));
++        }
++      }
++      waitForConnection(() -> {
++        binder.updateSessionQueue(list, currentMusicId);
++        callback.resolve(null);
++      });
++    }
++
+     @ReactMethod
+     public void removeUpcomingTracks(final Promise callback) {
+         waitForConnection(() -> {
+diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MusicBinder.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MusicBinder.java
+index f41035a..fb33dc6 100644
+--- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MusicBinder.java
++++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/MusicBinder.java
+@@ -4,6 +4,8 @@ import android.os.Binder;
+ import android.os.Bundle;
+ import android.support.v4.media.session.MediaSessionCompat;
+ 
++import java.util.List;
++
+ import androidx.media3.common.util.UnstableApi;
+ 
+ import com.facebook.react.bridge.Promise;
+@@ -72,6 +74,10 @@ public class MusicBinder extends Binder {
+       session.setActive(true);
+     }
+ 
++    public void updateSessionQueue(List<Bundle> items, String currentMusicId) {
++        manager.getMetadata().updateSessionQueue(items, currentMusicId);
++    }
++
+     public int getRatingType() {
+         return manager.getMetadata().getRatingType();
+     }
+diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/ButtonEvents.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/ButtonEvents.java
+index 7f3773b..5ed6b44 100644
+--- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/ButtonEvents.java
++++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/ButtonEvents.java
+@@ -100,8 +100,13 @@ public class ButtonEvents extends MediaSessionCompat.Callback {
+             Bundle bundle = new Bundle();
+             bundle.putInt("index", i);
+             service.emit(MusicEvents.BUTTON_SKIP, bundle);
+-            break;
++            return;
+         }
++
++        // JS 下发的外部播放队列：queueId 即列表下标，交给 JS 切歌
++        Bundle bundle = new Bundle();
++        bundle.putInt("index", (int)id);
++        service.emit(MusicEvents.BUTTON_QUEUE_ITEM, bundle);
+     }
+ 
+     @Override
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
-index e185728..c3a542a 100644
+index e185728..d0f76be 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
 +++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
-@@ -202,6 +202,14 @@ public class MetadataManager {
+@@ -16,9 +16,11 @@ import android.graphics.drawable.Drawable;
+ import android.net.Uri;
+ import android.os.Build;
+ import android.os.Bundle;
++import android.support.v4.media.MediaDescriptionCompat;
+ import android.support.v4.media.MediaMetadataCompat;
+ import android.support.v4.media.RatingCompat;
+ import android.support.v4.media.session.MediaSessionCompat;
++import android.support.v4.media.session.MediaSessionCompat.QueueItem;
+ import android.support.v4.media.session.PlaybackStateCompat;
+ 
+ import androidx.annotation.NonNull;
+@@ -99,6 +101,14 @@ public class MetadataManager {
+ 
+         builder.setContentIntent(PendingIntent.getActivity(context, 0, openApp, PendingIntent.FLAG_CANCEL_CURRENT));
+ 
++        // 会话点击意图：原子随身听/系统媒体入口点击后拉起 APP 并直达播放详情页（深链）
++        Intent sessionIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("lxmusic://player/openPlayDetail"));
++        sessionIntent.setPackage(packageName);
++        sessionIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
++        int sessionIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT;
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) sessionIntentFlags |= PendingIntent.FLAG_IMMUTABLE;
++        session.setSessionActivity(PendingIntent.getActivity(context, 1, sessionIntent, sessionIntentFlags));
++
+         builder.setSmallIcon(R.drawable.play);
+         builder.setCategory(NotificationCompat.CATEGORY_TRANSPORT);
+ 
+@@ -202,6 +212,14 @@ public class MetadataManager {
          MediaMetadataCompat.Builder metadata = track.toMediaMetadata();
  
          metadata.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap);
@@ -17,7 +126,7 @@ index e185728..c3a542a 100644
          builder.setLargeIcon(bitmap);
  
          session.setMetadata(metadata.build());
-@@ -222,6 +230,10 @@ public class MetadataManager {
+@@ -222,10 +240,47 @@ public class MetadataManager {
        if (data.containsKey("lyric")) {
          prevMetadata.putString("android.media.metadata.LYRICS", data.getString("lyric"));
        }
@@ -28,6 +137,43 @@ index e185728..c3a542a 100644
        session.setMetadata(prevMetadata.build());
        updatePlaybackState(manager.getPlayback());
      }
+ 
++    /**
++     * 由 JS 下发当前播放队列，供原子随身听/系统媒体的“播放列表”按钮读取。
++     * queueId 直接使用列表下标，点击时通过 onSkipToQueueItem 回传该下标。
++     * @param items 每项 Bundle 含 musicId/title/artist/artwork
++     * @param currentMusicId 当前播放歌曲 id，用于高亮当前项
++     */
++    @SuppressWarnings("unchecked")
++    public void updateSessionQueue(Object rawItems, String currentMusicId) {
++      List<QueueItem> queueItems = new ArrayList<>();
++      long activeQueueId = QueueItem.UNKNOWN_ID;
++      List<Bundle> items = rawItems instanceof List ? (List<Bundle>) rawItems : null;
++      if (items != null) {
++        for (int i = 0; i < items.size(); i++) {
++          Bundle item = items.get(i);
++          if (item == null) continue;
++          String musicId = item.getString("musicId", "");
++          String title = item.getString("title", "");
++          String artist = item.getString("artist", "");
++          String artwork = item.getString("artwork");
++          MediaDescriptionCompat.Builder descBuilder = new MediaDescriptionCompat.Builder()
++              .setMediaId(musicId)
++              .setTitle(title)
++              .setSubtitle(artist);
++          if (artwork != null && !artwork.isEmpty()) descBuilder.setIconUri(Uri.parse(artwork));
++          queueItems.add(new QueueItem(descBuilder.build(), i));
++          if (currentMusicId != null && currentMusicId.equals(musicId)) activeQueueId = i;
++        }
++      }
++      session.setQueue(queueItems.isEmpty() ? null : queueItems);
++      session.setQueueTitle("播放列表");
++      if (activeQueueId != QueueItem.UNKNOWN_ID) session.setActiveQueueItemId(activeQueueId);
++    }
++
+     /**
+      * Updates the current track
+      * @param track The new track
 diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/models/TrackMetadata.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/models/TrackMetadata.java
 index 4f7afe7..141b0d8 100644
 --- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/models/TrackMetadata.java
@@ -62,10 +208,18 @@ index 4f7afe7..141b0d8 100644
          if (duration > 0) {
              builder.putLong(METADATA_KEY_DURATION, duration);
 diff --git a/node_modules/react-native-track-player/src/interfaces.ts b/node_modules/react-native-track-player/src/interfaces.ts
-index e42a62e..26b1fea 100644
+index e42a62e..97fd47a 100644
 --- a/node_modules/react-native-track-player/src/interfaces.ts
 +++ b/node_modules/react-native-track-player/src/interfaces.ts
-@@ -221,6 +221,8 @@ export interface TrackMetadataBase {
+@@ -168,6 +168,7 @@ export enum Event {
+   RemotePause = 'remote-pause',
+   RemoteStop = 'remote-stop',
+   RemoteSkip = 'remote-skip',
++  RemoteQueueItem = 'remote-queue-item',
+   RemoteNext = 'remote-next',
+   RemotePrevious = 'remote-previous',
+   RemoteJumpForward = 'remote-jump-forward',
+@@ -221,6 +222,8 @@ export interface TrackMetadataBase {
    rating?: number | boolean
    isLiveStream?: boolean
    lyric?: string
@@ -74,7 +228,7 @@ index e42a62e..26b1fea 100644
  }
  
  export interface NowPlayingMetadata extends TrackMetadataBase {
-@@ -232,6 +234,8 @@ export interface NowPlayingTitles {
+@@ -232,6 +235,8 @@ export interface NowPlayingTitles {
    artist?: string
    album?: string
    lyric?: string
@@ -83,3 +237,33 @@ index e42a62e..26b1fea 100644
  }
  
  export interface Track extends TrackMetadataBase {
+diff --git a/node_modules/react-native-track-player/src/trackPlayer.ts b/node_modules/react-native-track-player/src/trackPlayer.ts
+index a915740..aedb349 100644
+--- a/node_modules/react-native-track-player/src/trackPlayer.ts
++++ b/node_modules/react-native-track-player/src/trackPlayer.ts
+@@ -156,6 +156,17 @@ async function updateNowPlayingTitles(titles: NowPlayingTitles): Promise<void> {
+   return TrackPlayer.updateNowPlayingTitles(titles)
+ }
+ 
++// 下发当前播放队列给系统 MediaSession（原子随身听“播放列表”按钮）
++export interface SessionQueueItem {
++  musicId: string
++  title: string
++  artist: string
++  artwork?: string
++}
++async function updateSessionQueue(items: SessionQueueItem[], currentMusicId?: string | null): Promise<void> {
++  return TrackPlayer.updateSessionQueue(items, currentMusicId ?? null)
++}
++
+ // MARK: - Player API
+ 
+ async function reset(): Promise<void> {
+@@ -283,6 +294,7 @@ export default {
+   clearNowPlayingMetadata,
+   updateNowPlayingMetadata,
+   updateNowPlayingTitles,
++  updateSessionQueue,
+ 
+   // MARK: - Player API
+   reset,

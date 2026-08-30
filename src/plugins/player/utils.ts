@@ -264,6 +264,8 @@ export const updateOptions = async(options = {
     Capability.SeekTo,
     Capability.SkipToNext,
     Capability.SkipToPrevious,
+    // 允许系统媒体/原子随身听“播放列表”点歌回调（ACTION_SKIP_TO_QUEUE_ITEM）
+    Capability.Skip,
   ],
 
   notificationCapabilities: [
@@ -272,6 +274,7 @@ export const updateOptions = async(options = {
     Capability.Stop,
     Capability.SkipToNext,
     Capability.SkipToPrevious,
+    Capability.Skip,
   ],
 
   // // An array of capabilities that will show up when the notification is in the compact form on Android
