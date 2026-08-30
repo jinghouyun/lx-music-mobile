@@ -9,7 +9,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import java.util.Collections
-import java.util.EnumSet
 
 /**
  * htdemucs 推理引擎（ONNX Runtime Java API）。
@@ -77,7 +76,8 @@ class DemucsSeparator(
     for (name in order) {
       try {
         when (name) {
-          "xnnpack" -> opts.addXnnpack(Runtime.getRuntime().availableProcessors().coerceIn(2, 4))
+          // ORT 1.21 Java 的 addXnnpack 接受 EP 选项 Map；线程数由 setIntraOpNumThreads 控制
+          "xnnpack" -> opts.addXnnpack(emptyMap())
           "nnapi" -> tryEnableNnapi(opts)
           "cpu" -> { /* 默认 */ }
         }
@@ -90,18 +90,9 @@ class DemucsSeparator(
   }
 
   private fun tryEnableNnapi(opts: OrtSession.SessionOptions) {
-    try {
-      val flagsClass = Class.forName("ai.onnxruntime.OrtSession\$SessionOptions\$NnapiFlags")
-      @Suppress("UNCHECKED_CAST")
-      val flags = EnumSet.noneOf(flagsClass as Class<out Enum<*>>)
-      val method = OrtSession.SessionOptions::class.java.getMethod(
-        "addNnapi", EnumSet::class.java
-      )
-      method.invoke(opts, flags)
-    } catch (t: Throwable) {
-      // 回退到无参 addNnapi()
-      OrtSession.SessionOptions::class.java.getMethod("addNnapi").invoke(opts)
-    }
+    // ORT 1.21: addNnapi() 默认 flags=0（fp32、不支持的算子自动回退 CPU）。
+    // 仅在 API 27+ 有 NNAPI；低版本创建会话时会抛异常，由 setupEp 回退。
+    opts.addNnapi()
   }
 
   fun close() {
