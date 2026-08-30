@@ -1,10 +1,13 @@
-import TrackPlayer from 'react-native-track-player'
+import { NativeModules } from 'react-native'
 import playerState from '@/store/player/state'
 import { getList } from '@/core/player/playInfo'
 import { isInitialized } from '@/plugins/player'
 import { throttleBackgroundTimer } from '@/utils/tools'
 
 type PlayMusic = LX.Player.PlayMusic
+
+// 直接调用 RNTP 原生模块（补丁新增的 @ReactMethod，不走其会被 files 白名单裁掉的 src 封装）
+const { TrackPlayerModule } = NativeModules
 
 // 取歌曲在系统队列里要展示的字段（在线歌曲 / 下载项两种结构）
 const getMusicFields = (musicInfo: PlayMusic) => {
@@ -44,7 +47,8 @@ const syncSessionQueue = () => {
   })
   const currentMusicId = current ? getMusicFields(current).id ?? '' : ''
 
-  void TrackPlayer.updateSessionQueue(items, currentMusicId).catch(() => {})
+  // 原生 updateSessionQueue(items, currentMusicId): Promise<void>
+  void Promise.resolve(TrackPlayerModule?.updateSessionQueue?.(items, currentMusicId)).catch(() => {})
 }
 
 const throttledSync = throttleBackgroundTimer(syncSessionQueue, 200)

@@ -50,7 +50,8 @@ const registerPlaybackService = async() => {
   })
 
   // 原子随身听/系统媒体“播放列表”里点歌：按当前列表下标切歌
-  TrackPlayer.addEventListener(TPEvent.RemoteQueueItem, async({ index }: { index: number }) => {
+  // 事件名用字符串（补丁在原生侧 emit “remote-queue-item”，不依赖 RNTP 会被裁掉的 src 枚举）
+  TrackPlayer.addEventListener('remote-queue-item' as TPEvent, async({ index }: { index: number }) => {
     const listId = playerState.playInfo.playerListId
     if (listId == null || typeof index != 'number' || index < 0) return
     void playList(listId, index)
