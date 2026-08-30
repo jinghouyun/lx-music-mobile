@@ -1,0 +1,43 @@
+name: Deploy APK to apk branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Workflow run ID to download artifact from'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download artifact
+        run: |
+          curl -L -o app-release.zip \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.inputs.run_id }}/artifacts" | python3 -c "import sys,json; print(json.load(sys.stdin)['artifacts'][0]['id'])")/zip"
+          unzip -l app-release.zip
+
+      - name: Extract arm64-v8a APK
+        run: |
+          unzip -o app-release.zip -d apks
+          ls -la apks/
+          APK_FILE=$(ls apks/*arm64-v8a*.apk | head -1)
+          echo "APK: $APK_FILE"
+          cp "$APK_FILE" app.apk
+          ls -lh app.apk
+
+      - name: Push to apk branch
+        run: |
+          mkdir -p /tmp/apk-deploy
+          cd /tmp/apk-deploy
+          git init -b apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp $GITHUB_WORKSPACE/app.apk .
+          git add app.apk
+          git commit -m "apk"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk
