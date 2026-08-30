@@ -159,4 +159,8 @@ class VocalSeparatorModule(
     }
     return s
   }
+
+  // NativeEventEmitter 在 Android 上要求的订阅桩方法
+  @ReactMethod fun addListener(eventName: String) { /* 仅占位 */ }
+  @ReactMethod fun removeListeners(count: Int) { /* 仅占位 */ }
 }

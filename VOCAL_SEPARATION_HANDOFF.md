@@ -101,6 +101,19 @@
   2. Kotlin：`BaseReactPackage` → `TurboReactPackage`；`jsCallInvokerHolder` → `catalystInstance?.jsCallInvokerHolder`；`ReactModuleInfo` 命名参数改位置参数。
   3. C++：注释掉 `setExternalMemoryPressure` 调用（RN 0.73 的 JSI 没有这个方法，0.76+ 才加）。
 
+### 阶段 2 已完成（2026-08-30）
+- [x] 模型选定：`StemSplitio/htdemucs-onnx` 的 **FP16 权重版** `htdemucs_fp16weights.onnx`（165MB，MIT）。**模型不打进 APK**，首次使用时从 **hf-mirror 镜像**下载到 `DocumentDirectoryPath/models/`（国内实测 10MB/s+），下载后按字节数 165612636 校验完整性。
+- [x] **原生 Kotlin 模块** `com.kugou.android.vocalsep`（后台线程，不阻塞 JS）：
+  - `AudioDecoder.kt`：MediaExtractor/MediaCodec 硬解（mp3/aac/flac…）→ 单声道复制成双声道 → 输出 f32。
+  - `SincResampler.kt`：Kaiser 窗 sinc 流式重采样（32 taps，~90dB 阻带）到 44.1kHz；44.1k 音源直通。
+  - `DemucsSeparator.kt`：ORT Java API，**XNNPACK → NNAPI → CPU 自动回退**；7.8s/块（N=343980，overlap=85995，stride=257985）三角窗加权 overlap-add，**流式产出、固定 ~20MB 内存**；输出 vocals.wav + accompaniment.wav（drums+bass+other 求和）。
+  - `VocalSeparatorModule.kt`：RN 桥（separate/isCached/getStemPaths/clearCache/getCacheInfo），进度走 `VocalSepProgress` 事件。
+  - 缓存目录：`filesDir/vocalsep/<songId>/{vocals,accompaniment}.wav`（WAV PCM16，供阶段 3 原生混音直接读取）。
+- [x] **JS 编排层** `src/utils/vocalSeparation.ts` + 原生封装 `src/utils/nativeModules/vocalSeparator.ts`：模型下载管理、音源下载、进度 Promise 化、缓存管理。
+- [x] 沙箱 Python 验证（与 Kotlin 同参数）：模型 I/O = 输入 `mix (1,2,343980)` / 输出 `stems (1,4,2,343980)`（drums,bass,other,vocals）；分块 OLA 重建相关性 **0.9998**；x86 2 线程约 **1.0x 实时**（7.8s 块/5.7s）；器乐段人声轨正确静音（RMS 0.019 vs 混音 0.257）。
+- [x] **关键坑：图优化必须关**（`OptLevel.NO_OPT`）——fp16 模型在 BASIC/ALL 优化期 Cast 折叠导致加载峰值 3.3GB（会杀进程），NO_OPT 仅 0.39GB；XNNPACK/NNAPI EP 不受影响。
+- [x] ORT Java 1.21 API 签名：`addXnnpack(Map<String,String>)`（空 Map 即可）、`addNnapi()` 无参。
+
 ---
 
 ## 5. 已踩过的坑（务必规避，省大量时间）
