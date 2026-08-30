@@ -35,6 +35,7 @@
 - 交付直链（gh-proxy，发用户前用 `curl -sI` 校验 HTTP 200 且 content-length 与文件字节一致）：
   - `https://gh-proxy.com/https://github.com/jinghouyun/lx-music-mobile/raw/apk/app.apk`
 - 另有 `apk-dist` 分支是历史遗留，本任务统一只用 `apk` 分支。
+- **快捷方式**：已新增 workflow `Deploy APK to apk branch`（`.github/workflows/deploy-apk.yml`），可手动触发，传入 Android Build 的 run_id，自动在 CI 内下载 artifact → 取 arm64 APK → 强推 apk 分支，省去本地下载上传的时间。
 
 ---
 
@@ -91,10 +92,14 @@
   - `import com.margelo.nitro.nitroonnxruntime.NitroOnnxruntimePackage;` / `new NitroOnnxruntimePackage()`
 - onnxruntime-common 实际落地版本 = 1.21.0（override 生效）。
 
-### 还没做（阶段 1 剩余）
-- [ ] **本地或 CI 真实编译一次，确认 C++/prefab/老架构/Kotlin 全部编过**（最关键、唯一未闭环的一步）。
-- [ ] 确认最终 APK 内确实包含 `lib/arm64-v8a/libonnxruntime.so`、`libNitroModules.so`、`libnitroonnxruntime.so`。
-- [ ] 推 main → 等 Android Build 成功 → 取 arm64 APK 改名 app.apk → 强推 apk 分支 → 校验 gh-proxy 直链交付。
+### 阶段 1 已完成（2026-08-30）
+- [x] **CI 真实编译通过**：Android Build workflow 成功（Run ID: 33311494983），C++/prefab/老架构/Kotlin 全部编过。
+- [x] APK 内确认包含 `lib/arm64-v8a/libonnxruntime.so`（~18MB）、`libNitroModules.so`（~1MB）、`libnitroonnxruntime.so`（~0.6MB）。
+- [x] 已推 main → Android Build 成功 → arm64 APK 改名 app.apk → 强推 apk 分支 → gh-proxy 直链校验通过。
+- [x] 修复了 3 处 RN 0.73 老架构兼容问题（用 patch-package 持久化，见 `patches/react-native-nitro-modules+0.35.0.patch`）：
+  1. AndroidManifest 添加 `tools:overrideLibrary="ai.onnxruntime"` 解决 minSdk 冲突（app 21 vs onnxruntime 24）。
+  2. Kotlin：`BaseReactPackage` → `TurboReactPackage`；`jsCallInvokerHolder` → `catalystInstance?.jsCallInvokerHolder`；`ReactModuleInfo` 命名参数改位置参数。
+  3. C++：注释掉 `setExternalMemoryPressure` 调用（RN 0.73 的 JSI 没有这个方法，0.76+ 才加）。
 
 ---
 
@@ -112,6 +117,12 @@
    unzip -oq platform-36.zip -d $ANDROID_HOME/platforms   # 直接解出 platforms/android-36
    ```
    （virtiofs 上解压大量小文件很慢，耐心等；CI 网络正常，不受此影响。）
+6. **react-native-nitro-modules 0.35.0 与 RN 0.73 有 3 处不兼容**（已用 patch-package 修复，`patches/react-native-nitro-modules+0.35.0.patch`）：
+   - Kotlin：`BaseReactPackage` 在 RN 0.73 中不存在，改用 `TurboReactPackage`。
+   - Kotlin：`ReactApplicationContext.jsCallInvokerHolder` 不存在，需从 `catalystInstance?.jsCallInvokerHolder` 取。
+   - Kotlin：`ReactModuleInfo` 构造函数不支持命名参数，改用位置参数。
+   - C++：`jsi::Object::setExternalMemoryPressure` 在 RN 0.73 中不存在（0.76+ 才有），注释掉不影响功能，只是 GC 内存压力提示没了。
+7. **minSdkVersion 冲突**：`onnxruntime-android:1.21.0` 要求 minSdk 24，但项目是 21。解决：AndroidManifest 加 `<uses-sdk tools:overrideLibrary="ai.onnxruntime" />`。ONNX Runtime 实际在 API 21 上也能跑（核心 JNI 层兼容），只是官方声明支持 24+。
 
 ---
 
