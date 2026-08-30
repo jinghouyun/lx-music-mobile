@@ -195,6 +195,14 @@ dependencies {
     // vivo 原子随身听 MediaBrowserService 浏览树依赖（RNTP 以 implementation 引入，不向 app 传递，这里显式声明）
     implementation 'androidx.media:media:1.1.0'
 
+    // ===== 人声分离：ONNX Runtime 原生运行库（Demucs v4 / htdemucs_ft 推理）=====
+    // 必须使用完整版 onnxruntime-android（不是 onnxruntime-mobile），它内置 NNAPI / XNNPACK 等 EP：
+    //   - NNAPI 硬件加速在运行时通过 SessionOptions.addNnapi()/appendExecutionProvider("NNAPI") 开启，
+    //     低版本或无 NPU 设备会自动回退 CPU，故 minSdk 21 可正常编译，运行时按 API27+ 判定即可。
+    // 版本必须与 react-native-nitro-onnxruntime 编译期抽取头文件的版本严格对齐（均为 1.21.0），否则 C++ ABI 不匹配。
+    // 该 AAR 内 jni/<abi>/libonnxruntime.so 会随 app 一起打包（封装库自身只链接不打包该 so）。
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.21.0'
+
   if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

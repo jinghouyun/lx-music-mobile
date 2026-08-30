@@ -24,3 +24,10 @@
   **[] $VALUES;
   public *;
 }
+
+# ===== 人声分离 / ONNX Runtime / Nitro Modules：JNI 与 C++ 按类名反射访问，禁止混淆、裁剪 =====
+-keep class com.margelo.nitro.** { *; }
+-keep class ai.onnxruntime.** { *; }
+-keepattributes InnerClasses, Signature, *Annotation*, EnclosingMethod
+-dontwarn ai.onnxruntime.**
+-dontwarn com.margelo.nitro.**
