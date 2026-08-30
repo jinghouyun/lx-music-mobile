@@ -98,9 +98,11 @@ const TaskRow = ({ task, onAction }: {
         </View>
       </View>
       <View style={styles.rowActions}>
-        <TouchableOpacity onPress={handlePress} style={styles.actionBtn}>
-          <Icon name={actionIcon} size={20} color={theme['c-primary-font']} />
-        </TouchableOpacity>
+        {task.status !== 'completed' ? (
+          <TouchableOpacity onPress={handlePress} style={styles.actionBtn}>
+            <Icon name={actionIcon} size={20} color={theme['c-primary-font']} />
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity onPress={() => { onAction('remove', task.id) }} style={styles.actionBtn}>
           <Icon name="remove" size={20} color={theme['c-font-label']} />
         </TouchableOpacity>
