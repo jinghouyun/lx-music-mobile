@@ -47,3 +47,31 @@ index f55986b..d6353ec 100644
          )
        moduleInfos
      }
+diff --git a/node_modules/react-native-nitro-modules/cpp/core/HybridObject.cpp b/node_modules/react-native-nitro-modules/cpp/core/HybridObject.cpp
+index 5c6e3ac..af78b2d 100644
+--- a/node_modules/react-native-nitro-modules/cpp/core/HybridObject.cpp
++++ b/node_modules/react-native-nitro-modules/cpp/core/HybridObject.cpp
+@@ -75,8 +75,10 @@ jsi::Value HybridObject::toObject(jsi::Runtime& runtime) {
+     }
+     jsi::Value value = cachedObject->second->lock(runtime);
+     if (!value.isUndefined()) {
+-      // 1.2. It is still alive - we can use it instead of creating a new one! But first, let's update memory-size
+-      value.getObject(runtime).setExternalMemoryPressure(runtime, getExternalMemorySize());
++      // 1.2. It is still alive - we can use it instead of creating a new one!
++      // NOTE: setExternalMemoryPressure is not available in RN 0.73 (added in RN 0.76+)
++      // Skipping GC memory pressure hint - slightly higher memory use but no functional impact
++      // value.getObject(runtime).setExternalMemoryPressure(runtime, getExternalMemorySize());
+       // 1.3. Return it now
+       return value;
+     }
+@@ -92,7 +94,9 @@ jsi::Value HybridObject::toObject(jsi::Runtime& runtime) {
+   object.setNativeState(runtime, shared());
+ 
+   // 5. Set memory size so Hermes GC knows about actual memory
+-  object.setExternalMemoryPressure(runtime, getExternalMemorySize());
++  // NOTE: setExternalMemoryPressure is not available in RN 0.73 (added in RN 0.76+)
++  // Skipping GC memory pressure hint - slightly higher memory use but no functional impact
++  // object.setExternalMemoryPressure(runtime, getExternalMemorySize());
+ 
+ #ifdef NITRO_DEBUG
+   // 6. Assign a private __type property for debugging - this will be used so users know it's not just an empty object.
