@@ -1,0 +1,85 @@
+diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
+index e185728..c3a542a 100644
+--- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
++++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/metadata/MetadataManager.java
+@@ -202,6 +202,14 @@ public class MetadataManager {
+         MediaMetadataCompat.Builder metadata = track.toMediaMetadata();
+ 
+         metadata.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap);
++        // 封面异步加载晚于歌词到达时，重建会丢掉 updateTitles 补入的歌词字段，这里继承回来
++        if (prevMetadata != null) {
++            MediaMetadataCompat oldMetadata = prevMetadata.build();
++            String oldLyricInfo = oldMetadata.getString("lyricInfo");
++            if (oldLyricInfo != null) metadata.putString("lyricInfo", oldLyricInfo);
++            String oldLyric = oldMetadata.getString("android.media.metadata.LYRICS");
++            if (oldLyric != null) metadata.putString("android.media.metadata.LYRICS", oldLyric);
++        }
+         builder.setLargeIcon(bitmap);
+ 
+         session.setMetadata(metadata.build());
+@@ -222,6 +230,10 @@ public class MetadataManager {
+       if (data.containsKey("lyric")) {
+         prevMetadata.putString("android.media.metadata.LYRICS", data.getString("lyric"));
+       }
++      if (data.containsKey("lyricInfo")) {
++        // vivo 原子岛/原子随身听、ColorOS 锁屏岛读取的歌词字段（JSON 字符串）
++        prevMetadata.putString("lyricInfo", data.getString("lyricInfo"));
++      }
+       session.setMetadata(prevMetadata.build());
+       updatePlaybackState(manager.getPlayback());
+     }
+diff --git a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/models/TrackMetadata.java b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/models/TrackMetadata.java
+index 4f7afe7..141b0d8 100644
+--- a/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/models/TrackMetadata.java
++++ b/node_modules/react-native-track-player/android/src/main/java/com/guichaguri/trackplayer/service/models/TrackMetadata.java
+@@ -30,6 +30,7 @@ public abstract class TrackMetadata {
+     public String genre;
+     public long duration;
+     public String lyric;
++    public String lyricInfo;
+ 
+     public RatingCompat rating;
+ 
+@@ -65,6 +66,9 @@ public abstract class TrackMetadata {
+       if (bundle.containsKey("lyric")) {
+         lyric = bundle.getString("lyric");
+       }
++      if (bundle.containsKey("lyricInfo")) {
++        lyricInfo = bundle.getString("lyricInfo");
++      }
+ 
+       if (bundle.containsKey("rating")) {
+         rating = Utils.getRating(bundle, "rating", ratingType);
+@@ -83,6 +87,10 @@ public abstract class TrackMetadata {
+         if (lyric != null) {
+             builder.putString("android.media.metadata.LYRICS", lyric);
+         }
++        if (lyricInfo != null) {
++            // vivo 原子岛/原子随身听、ColorOS 锁屏岛读取的歌词字段（JSON 字符串）
++            builder.putString("lyricInfo", lyricInfo);
++        }
+ 
+         if (duration > 0) {
+             builder.putLong(METADATA_KEY_DURATION, duration);
+diff --git a/node_modules/react-native-track-player/src/interfaces.ts b/node_modules/react-native-track-player/src/interfaces.ts
+index e42a62e..26b1fea 100644
+--- a/node_modules/react-native-track-player/src/interfaces.ts
++++ b/node_modules/react-native-track-player/src/interfaces.ts
+@@ -221,6 +221,8 @@ export interface TrackMetadataBase {
+   rating?: number | boolean
+   isLiveStream?: boolean
+   lyric?: string
++  // 系统歌词组件（vivo 原子岛/原子随身听、ColorOS 锁屏岛）读取的歌词字段（JSON 字符串）
++  lyricInfo?: string
+ }
+ 
+ export interface NowPlayingMetadata extends TrackMetadataBase {
+@@ -232,6 +234,8 @@ export interface NowPlayingTitles {
+   artist?: string
+   album?: string
+   lyric?: string
++  // 系统歌词组件（vivo 原子岛/原子随身听、ColorOS 锁屏岛）读取的歌词字段（JSON 字符串）
++  lyricInfo?: string
+ }
+ 
+ export interface Track extends TrackMetadataBase {

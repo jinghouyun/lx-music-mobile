@@ -19,6 +19,7 @@ import { getPosition } from '@/plugins/player'
 import playerState from '@/store/player/state'
 import settingState from '@/store/setting/state'
 import { updateNowPlayingTitles } from '@/plugins/player/utils'
+import { buildMediaSessionLyricInfo } from '@/plugins/player/lyricInfo'
 
 /**
  * init lyric
@@ -35,11 +36,13 @@ export const init = async() => {
 const handleSetLyric = async(lyric: string, translation = '', romalrc = '') => {
   lrcSetLyric(lyric, translation, romalrc)
   await setDesktopLyric(lyric, translation, romalrc)
-  if (settingState.setting['player.isShowBluetoothFullLyric']) {
-    void updateNowPlayingTitles({
-      lyric,
-    })
-  }
+  // vivo 原子岛/原子随身听、ColorOS 锁屏岛等：把歌词按系统约定封装成 lyricInfo JSON
+  // 写入 MediaSession（原文+翻译/罗马音按时间戳交错）；歌词为空时传空串清空。
+  // android.media.metadata.LYRICS（蓝牙歌词）仍受“显示完整蓝牙歌词”开关控制
+  const lyricInfo = buildMediaSessionLyricInfo(playerState.musicInfo, lyric, translation, romalrc)
+  const titles: Parameters<typeof updateNowPlayingTitles>[0] = { lyricInfo }
+  if (settingState.setting['player.isShowBluetoothFullLyric']) titles.lyric = lyric
+  void updateNowPlayingTitles(titles)
 }
 
 /**
