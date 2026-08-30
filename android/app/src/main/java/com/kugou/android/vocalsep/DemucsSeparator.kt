@@ -1,0 +1,266 @@
+package com.kugou.android.vocalsep
+
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import java.io.File
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import java.util.Collections
+import java.util.EnumSet
+
+/**
+ * htdemucs 推理引擎（ONNX Runtime Java API）。
+ *
+ * 模型输入 "mix"：(1, 2, 343980) float32，7.8s/块 @44.1kHz
+ * 模型输出 "stems"：(1, 4, 2, 343980)，stem 顺序 drums/bass/other/vocals
+ *
+ * 分块：overlap = N/4，三角窗加权 overlap-add；流式产出（每块推理完即可
+ * 写出已确定的 stride 个样本），内存占用固定（约 20MB），与歌曲长度无关。
+ *
+ * 输出两轨 WAV（44.1k 立体声 s16）：
+ *  - vocals.wav     = 第 4 个 stem（人声）
+ *  - accompaniment.wav = drums+bass+other 求和（伴奏）
+ */
+class DemucsSeparator(
+  private val modelPath: String,
+  private val ep: String, // "xnnpack" | "nnapi" | "cpu"
+  private val onProgress: (fraction: Double, stage: String) -> Unit,
+) {
+  companion object {
+    const val SAMPLE_RATE = 44100
+    const val SEGMENT_S = 7.8
+    val N_SAMPLES = (SEGMENT_S * SAMPLE_RATE).toInt() // 343980
+    val OVERLAP = N_SAMPLES / 4                        // 85995
+    val STRIDE = N_SAMPLES - OVERLAP                   // 257985
+  }
+
+  private lateinit var env: OrtEnvironment
+  private lateinit var session: OrtSession
+  private var actualEp = "cpu"
+
+  private val window = FloatArray(N_SAMPLES)
+
+  init {
+    // 三角/线性淡入淡出窗（与官方 infer.py 一致）
+    for (i in 0 until OVERLAP) {
+      val f = (i + 1).toFloat() / (OVERLAP + 1)
+      window[i] = f
+      window[N_SAMPLES - 1 - i] = f
+    }
+    for (i in OVERLAP until N_SAMPLES - OVERLAP) window[i] = 1f
+  }
+
+  fun open() {
+    env = OrtEnvironment.getEnvironment()
+    val opts = OrtSession.SessionOptions()
+    // 必须用 NO_OPT：实测 fp16 模型在 BASIC/ALL 图优化阶段会因 Cast 折叠产生
+    // 3GB+ 内存峰值（x86 实测 BASIC 峰值 3.3GB，NO_OPT 仅 0.39GB），低端机
+    // 会被系统直接杀掉。NO_OPT 下 XNNPACK/NNAPI EP 仍按算子正常接管。
+    opts.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
+    val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+    opts.setIntraOpNumThreads(threads)
+
+    actualEp = setupEp(opts)
+    session = env.createSession(modelPath, opts)
+  }
+
+  private fun setupEp(opts: OrtSession.SessionOptions): String {
+    // 优先用户指定，失败按 xnnpack -> cpu 回退
+    val order = when (ep) {
+      "nnapi" -> listOf("nnapi", "xnnpack", "cpu")
+      "cpu" -> listOf("cpu")
+      else -> listOf("xnnpack", "nnapi", "cpu")
+    }
+    for (name in order) {
+      try {
+        when (name) {
+          "xnnpack" -> opts.addXnnpack(Runtime.getRuntime().availableProcessors().coerceIn(2, 4))
+          "nnapi" -> tryEnableNnapi(opts)
+          "cpu" -> { /* 默认 */ }
+        }
+        return name
+      } catch (t: Throwable) {
+        // 该 EP 不可用，尝试下一个
+      }
+    }
+    return "cpu"
+  }
+
+  private fun tryEnableNnapi(opts: OrtSession.SessionOptions) {
+    try {
+      val flagsClass = Class.forName("ai.onnxruntime.OrtSession\$SessionOptions\$NnapiFlags")
+      @Suppress("UNCHECKED_CAST")
+      val flags = EnumSet.noneOf(flagsClass as Class<out Enum<*>>)
+      val method = OrtSession.SessionOptions::class.java.getMethod(
+        "addNnapi", EnumSet::class.java
+      )
+      method.invoke(opts, flags)
+    } catch (t: Throwable) {
+      // 回退到无参 addNnapi()
+      OrtSession.SessionOptions::class.java.getMethod("addNnapi").invoke(opts)
+    }
+  }
+
+  fun close() {
+    if (::session.isInitialized) session.close()
+  }
+
+  /**
+   * 执行分离。
+   * @param ch0File / ch1File 平面 f32 LE 临时文件（每声道）
+   * @param totalSamples 每声道样本数
+   * @param outDir 输出目录
+   * @return Pair(vocalsWav, accompanimentWav)
+   */
+  fun separate(ch0File: File, ch1File: File, totalSamples: Long, outDir: File): Pair<File, File> {
+    val raf0 = RandomAccessFile(ch0File, "r")
+    val raf1 = RandomAccessFile(ch1File, "r")
+
+    val tmpVocals = File(outDir, "vocals.wav.tmp")
+    val tmpAcc = File(outDir, "accompaniment.wav.tmp")
+    val wavV = WavWriter(tmpVocals)
+    val wavA = WavWriter(tmpAcc)
+    wavV.open()
+    wavA.open()
+
+    // 流式 OLA 累加缓冲
+    val accV0 = FloatArray(N_SAMPLES)
+    val accV1 = FloatArray(N_SAMPLES)
+    val accA0 = FloatArray(N_SAMPLES)
+    val accA1 = FloatArray(N_SAMPLES)
+    val wacc = FloatArray(N_SAMPLES)
+
+    val nChunks = maxOf(1, ((totalSamples + STRIDE - 1) / STRIDE).toInt())
+    var flushed = 0L
+
+    // 复用的输入缓冲
+    val inBytes = ByteBuffer.allocateDirect(2 * N_SAMPLES * 4).order(ByteOrder.nativeOrder())
+    val chunkCh = FloatArray(N_SAMPLES)
+
+    for (i in 0 until nChunks) {
+      val start = i.toLong() * STRIDE
+      val end = minOf(start + N_SAMPLES, totalSamples)
+      val clen = (end - start).toInt()
+
+      inBytes.clear()
+      val inFb = inBytes.asFloatBuffer()
+      readChannel(raf0, start, clen, chunkCh)
+      inFb.put(chunkCh, 0, N_SAMPLES)
+      readChannel(raf1, start, clen, chunkCh)
+      inFb.put(chunkCh, 0, N_SAMPLES)
+      inFb.flip()
+
+      val inputTensor = OnnxTensor.createTensor(env, inFb, longArrayOf(1, 2, N_SAMPLES.toLong()))
+      val output = session.run(Collections.singletonMap("mix", inputTensor))
+      inputTensor.close()
+
+      output.use { res ->
+        val stemsTensor = res.get("stems").orElseThrow {
+          RuntimeException("模型输出中找不到 stems")
+        } as OnnxTensor
+        val sb: FloatBuffer = stemsTensor.floatBuffer
+        // 布局 (1,4,2,N)：index = ((stem*2 + ch)*N + s)
+        for (s in 0 until N_SAMPLES) {
+          val w = window[s]
+          val d0 = sb.get((0 * 2) * N_SAMPLES + s)
+          val d1 = sb.get((0 * 2 + 1) * N_SAMPLES + s)
+          val b0 = sb.get((1 * 2) * N_SAMPLES + s)
+          val b1 = sb.get((1 * 2 + 1) * N_SAMPLES + s)
+          val o0 = sb.get((2 * 2) * N_SAMPLES + s)
+          val o1 = sb.get((2 * 2 + 1) * N_SAMPLES + s)
+          val v0 = sb.get((3 * 2) * N_SAMPLES + s)
+          val v1 = sb.get((3 * 2 + 1) * N_SAMPLES + s)
+
+          accV0[s] += v0 * w
+          accV1[s] += v1 * w
+          accA0[s] += (d0 + b0 + o0) * w
+          accA1[s] += (d1 + b1 + o1) * w
+          wacc[s] += w
+        }
+      }
+
+      // 写出已确定区域 [0, flushLen)
+      val flushLen = if (i == nChunks - 1) {
+        (totalSamples - flushed).toInt()
+      } else {
+        STRIDE
+      }
+      val outBuf = ByteBuffer.allocate(flushLen * 2 * 2).order(ByteOrder.LITTLE_ENDIAN)
+      for (s in 0 until flushLen) {
+        val wt = wacc[s].coerceAtLeast(1e-8f)
+        putS16(outBuf, accV0[s] / wt)
+        putS16(outBuf, accV1[s] / wt)
+      }
+      wavV.write(outBuf.array())
+      outBuf.clear()
+      for (s in 0 until flushLen) {
+        val wt = wacc[s].coerceAtLeast(1e-8f)
+        putS16(outBuf, accA0[s] / wt)
+        putS16(outBuf, accA1[s] / wt)
+      }
+      wavA.write(outBuf.array())
+      flushed += flushLen
+
+      // 把重叠尾部 [flushLen, N) 平移到头部，清空其余
+      if (i < nChunks - 1) {
+        shiftTail(accV0, flushLen)
+        shiftTail(accV1, flushLen)
+        shiftTail(accA0, flushLen)
+        shiftTail(accA1, flushLen)
+        shiftTailW(wacc, flushLen)
+      }
+
+      onProgress((i + 1).toDouble() / nChunks, "inferring")
+    }
+
+    raf0.close()
+    raf1.close()
+    wavV.close()
+    wavA.close()
+
+    val vocalsWav = File(outDir, "vocals.wav")
+    val accWav = File(outDir, "accompaniment.wav")
+    tmpVocals.renameTo(vocalsWav)
+    tmpAcc.renameTo(accWav)
+    return Pair(vocalsWav, accWav)
+  }
+
+  private fun shiftTail(arr: FloatArray, flushLen: Int) {
+    val tail = N_SAMPLES - flushLen
+    System.arraycopy(arr, flushLen, arr, 0, tail)
+    java.util.Arrays.fill(arr, tail, N_SAMPLES, 0f)
+  }
+
+  private fun shiftTailW(arr: FloatArray, flushLen: Int) {
+    val tail = N_SAMPLES - flushLen
+    System.arraycopy(arr, flushLen, arr, 0, tail)
+    java.util.Arrays.fill(arr, tail, N_SAMPLES, 0f)
+  }
+
+  /** 从平面 f32 文件读取 [start, start+clen)，不足补零；输出长度 N_SAMPLES */
+  private fun readChannel(raf: RandomAccessFile, start: Long, clen: Int, out: FloatArray) {
+    val bb = ByteBuffer.allocate(N_SAMPLES * 4).order(ByteOrder.LITTLE_ENDIAN)
+    raf.seek(start * 4)
+    var read = 0
+    val tmp = ByteArray(clen * 4)
+    while (read < tmp.size) {
+      val r = raf.read(tmp, read, tmp.size - read)
+      if (r < 0) break
+      read += r
+    }
+    bb.put(tmp, 0, read)
+    // 剩余补零（bb 已初始化为 0）
+    val fb = bb.asFloatBuffer()
+    fb.get(out, 0, N_SAMPLES)
+  }
+
+  private fun putS16(bb: ByteBuffer, v: Float) {
+    var x = v
+    if (x > 1f) x = 1f
+    if (x < -1f) x = -1f
+    bb.putShort((x * 32767f).toInt().toShort())
+  }
+}

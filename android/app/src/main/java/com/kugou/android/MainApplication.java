@@ -15,6 +15,7 @@ import com.kugou.android.lyric.LyricPackage;
 import com.kugou.android.userApi.UserApiPackage;
 import com.kugou.android.utils.UtilsPackage;
 import com.kugou.android.vivo.VivoListPackage;
+import com.kugou.android.vocalsep.VocalSeparatorPackage;
 
 public class MainApplication extends NavigationApplication {
 
@@ -37,6 +38,7 @@ public class MainApplication extends NavigationApplication {
           packages.add(new CryptoPackage());
           packages.add(new UserApiPackage());
           packages.add(new VivoListPackage());
+          packages.add(new VocalSeparatorPackage());
           return packages;
         }
 
