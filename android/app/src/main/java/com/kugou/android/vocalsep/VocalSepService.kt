@@ -162,13 +162,17 @@ class VocalSepService : Service() {
           runJob(job)
         }
 
-        synchronized(lock) {
+        // 注意：Kotlin 禁止在 inline lambda 内 break/continue，用返回值控制循环
+        val hasMore = synchronized(lock) {
           current = null
           if (pending == null) {
             workerAlive = false
-            break
+            false
+          } else {
+            true
           }
         }
+        if (!hasMore) break
       }
     } finally {
       synchronized(lock) { workerAlive = false }
