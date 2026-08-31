@@ -3,6 +3,7 @@ import { View } from 'react-native'
 import PlayModeBtn from './PlayModeBtn'
 import MusicAddBtn from './MusicAddBtn'
 import TimeoutExitBtn from './TimeoutExitBtn'
+import VocalBtn from '@/screens/PlayDetail/Vertical/Player/components/MoreBtn/VocalBtn'
 
 export default () => {
   return (
@@ -10,6 +11,7 @@ export default () => {
       <TimeoutExitBtn />
       <MusicAddBtn />
       <PlayModeBtn />
+      <VocalBtn />
     </View>
   )
 }
