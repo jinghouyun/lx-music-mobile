@@ -121,7 +121,9 @@ class MixPlayerEngine {
       val (aOff, aLen) = parseWav(aRaf)
 
       val vCh = vRaf.channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, vOff, vLen)
+        .order(java.nio.ByteOrder.LITTLE_ENDIAN)
       val aCh = aRaf.channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, aOff, aLen)
+        .order(java.nio.ByteOrder.LITTLE_ENDIAN)
       vocalsBuf = vCh.asShortBuffer()
       accBuf = aCh.asShortBuffer()
       totalFrames = min(vLen, aLen) / (CHANNELS * 2)
