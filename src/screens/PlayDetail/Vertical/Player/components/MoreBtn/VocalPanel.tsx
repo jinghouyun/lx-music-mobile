@@ -108,6 +108,15 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
             </View>
           </View>
 
+          {/* 混音播放失败原因（常驻，便于定位"没声音"） */}
+          {state.mixError
+            ? (
+                <Text size={12} color="rgb(220, 80, 80)" style={styles.statusLine}>
+                  {state.mixError}
+                </Text>
+              )
+            : null}
+
           {/* 分离进度 */}
           {busy
             ? (

@@ -4,6 +4,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.util.Log
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ShortBuffer
@@ -34,6 +35,7 @@ class MixPlayerEngine {
     private const val BUFFER_FRAMES = 2048
     /** 增益斜坡长度（帧）：2048 帧 ≈ 46ms @44.1k，人耳感知为平滑渐变、无阶跃爆音 */
     private const val RAMP_FRAMES = 2048
+    private const val TAG = "VocalMixPlayer"
   }
 
   @Volatile private var mode = MODE_OFF
@@ -126,13 +128,18 @@ class MixPlayerEngine {
     try {
       val vFile = File(vocalsPath)
       val aFile = File(accPath)
-      require(vFile.exists() && aFile.exists()) { "音轨文件不存在" }
+      Log.i(TAG, "prepare: vocals=$vocalsPath exists=${vFile.exists()} len=${vFile.length()};" +
+        " acc=$accPath exists=${aFile.exists()} len=${aFile.length()}")
+      require(vFile.exists() && aFile.exists()) {
+        "音轨文件不存在(v=${vFile.exists()},a=${aFile.exists()})"
+      }
 
       val vRaf = RandomAccessFile(vFile, "r")
       val aRaf = RandomAccessFile(aFile, "r")
       openFiles.add(vRaf); openFiles.add(aRaf)
       val (vOff, vLen) = parseWav(vRaf)
       val (aOff, aLen) = parseWav(aRaf)
+      Log.i(TAG, "prepare: wav data vOff=$vOff vLen=$vLen aOff=$aOff aLen=$aLen")
 
       val vCh = vRaf.channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, vOff, vLen)
         .order(java.nio.ByteOrder.LITTLE_ENDIAN)
@@ -143,13 +150,16 @@ class MixPlayerEngine {
       totalFrames = min(vLen, aLen) / (CHANNELS * 2)
       dataOffset = 0
       baseFrame = 0
+      nextFrame = 0
       ended = false
+      require(totalFrames > 0) { "音轨数据为空(totalFrames=0)" }
 
       val minBuf = AudioTrack.getMinBufferSize(
         SAMPLE_RATE,
         AudioFormat.CHANNEL_OUT_STEREO,
         AudioFormat.ENCODING_PCM_16BIT,
       )
+      Log.i(TAG, "prepare: minBuf=$minBuf totalFrames=$totalFrames durMs=${totalFrames * 1000 / SAMPLE_RATE}")
       val track = AudioTrack(
         AudioAttributes.Builder()
           .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -165,7 +175,9 @@ class MixPlayerEngine {
         AudioManager.AUDIO_SESSION_ID_GENERATE,
       )
       audioTrack = track
+      Log.i(TAG, "prepare: AudioTrack 创建成功 state=${track.playState}")
     } catch (t: Throwable) {
+      Log.e(TAG, "prepare 失败", t)
       stop()
       throw t
     }
@@ -186,6 +198,7 @@ class MixPlayerEngine {
     paused = false
     track.flush()
     track.play()
+    Log.i(TAG, "play: startMs=$startMs baseFrame=$baseFrame mode=$mode strength=$strength totalFrames=$totalFrames")
     playThread = Thread({ renderLoop() }, "VocalMixPlayer").also { it.start() }
   }
 
@@ -266,6 +279,7 @@ class MixPlayerEngine {
         if (offset >= totalShorts) nextFrame += frames
       }
     } catch (t: Throwable) {
+      Log.e(TAG, "renderLoop 异常", t)
       onError?.invoke(t.message ?: t.javaClass.simpleName)
     }
   }

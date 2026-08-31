@@ -39,6 +39,8 @@ interface VocalState {
   task: SepTaskState
   /** 去人声强度 0..1（1=纯伴奏） */
   strength: number
+  /** 混音引擎启动/播放失败原因（常驻面板，便于定位"没声音"） */
+  mixError?: string | null
 }
 
 const STORAGE_STRENGTH = 'vocalSep_strength'
@@ -128,9 +130,17 @@ const stopMix = () => {
 /** 启动双轨混音播放（调用前已确认缓存存在） */
 const startMix = async(mode: Exclude<VocalMode, 'original'>) => {
   const song = await getCurrentSong()
-  if (!song) return
+  if (!song) {
+    state.mixError = '未获取到当前播放歌曲'
+    emit()
+    return
+  }
   const paths = await getStemPaths(song.id)
-  if (!paths) return
+  if (!paths) {
+    state.mixError = '找不到分离结果文件（可能已被清理），请重新分离'
+    emit()
+    return
+  }
   try {
     stopMix()
     const pos = await TrackPlayer.getPosition().catch(() => 0)
@@ -139,13 +149,15 @@ const startMix = async(mode: Exclude<VocalMode, 'original'>) => {
     // 混音引擎确认启动后再把原唱静音，避免引擎没出声导致整首无声
     await TrackPlayer.setVolume(0)
     state.activeMode = mode
+    state.mixError = null
     startSync()
     emit()
   } catch (e: any) {
-    // 混音启动失败：务必恢复原唱音量并提示，否则会出现"点伴奏/人声后没声音"
+    // 混音启动失败：务必恢复原唱音量，并把原因常驻面板，避免只弹一闪而过的 toast
     stopMix()
     await TrackPlayer.setVolume(1).catch(() => {})
     state.activeMode = 'original'
+    state.mixError = `混音启动失败：${e?.message ?? e?.code ?? e}`
     emit()
     toast(`混音播放失败，已恢复原唱：${e?.message ?? e}`)
   }
@@ -217,6 +229,7 @@ const isTaskBusy = (songId?: string) => {
 /** 用户切换模式（三档） */
 export const setVocalMode = async(mode: VocalMode) => {
   state.desiredMode = mode
+  state.mixError = null
   emit()
 
   if (mode === 'original') {
