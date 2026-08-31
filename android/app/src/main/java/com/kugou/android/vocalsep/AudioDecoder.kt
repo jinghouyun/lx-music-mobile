@@ -4,6 +4,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Build
+import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
@@ -22,9 +23,18 @@ class AudioDecoder {
     val ch1File: File,
     val samples: Long, // 每声道样本数
     val srcRate: Int,
+    /** 以下为诊断字段，用于定位"解码静音"类问题 */
+    val mime: String,
+    val channels: Int,
+    val pcmEncoding: Int,
+    val resamplerUsed: Boolean,
+    val rawDecodedPeak: Float,  // MediaCodec 直接解出的 PCM 峰值
+    val writtenPeak: Float,     // 最终写入 f32 文件的峰值（重采样后）
   )
 
   fun decode(audioPath: String, workDir: File): Result {
+    val srcFile = File(audioPath)
+    Log.i("AudioDecoder", "decode: path=$audioPath exists=${srcFile.exists()} size=${srcFile.length()}")
     val extractor = MediaExtractor()
     extractor.setDataSource(audioPath)
 
@@ -67,12 +77,19 @@ class AudioDecoder {
 
     var totalInputSamples = 0L
     var totalOutSamples = 0L
+    var rawDecodedPeak = 0f
+    var writtenPeak = 0f
 
     fun pushResampled(r0: SincResampler?, r1: SincResampler?, flush: Boolean) {
       if (r0 != null && r1 != null) {
         val a = r0.read(flush)
         val b = r1.read(flush)
         val n = minOf(a.size, b.size)
+        var pk = 0f
+        for (i in 0 until n) {
+          val va = a[i]; val aa = if (va < 0f) -va else va; if (aa > pk) pk = aa
+        }
+        if (pk > writtenPeak) writtenPeak = pk
         writePlanar(out0, a, n)
         writePlanar(out1, b, n)
         totalOutSamples += n
@@ -105,6 +122,8 @@ class AudioDecoder {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && fmt.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
           pcmEncoding = fmt.getInteger(MediaFormat.KEY_PCM_ENCODING)
         }
+        Log.i("AudioDecoder", "输出格式: mime=$mime rate=$sampleRate ch=$channelCount " +
+          "pcmEncoding=$pcmEncoding (2=16bit,4=float) 需重采样=${sampleRate != TARGET_RATE}")
         if (sampleRate != TARGET_RATE) {
           resampler0 = SincResampler(sampleRate, TARGET_RATE)
           resampler1 = SincResampler(sampleRate, TARGET_RATE)
@@ -154,12 +173,19 @@ class AudioDecoder {
             }
           }
           totalInputSamples += frames
+          // 诊断：统计 MediaCodec 直接解出的原始峰值
+          var pk = 0f
+          for (i in 0 until frames) {
+            val v = f0[i]; val a = if (v < 0f) -v else v; if (a > pk) pk = a
+          }
+          if (pk > rawDecodedPeak) rawDecodedPeak = pk
 
           if (resampler0 != null) {
             resampler0.feed(f0, 0, frames)
             resampler1!!.feed(f1, 0, frames)
             pushResampled(resampler0, resampler1, false)
           } else {
+            if (pk > writtenPeak) writtenPeak = pk
             writePlanar(out0, f0, frames)
             writePlanar(out1, f1, frames)
             totalOutSamples += frames
@@ -187,7 +213,13 @@ class AudioDecoder {
     if (totalOutSamples <= 0) {
       throw RuntimeException("音频解码失败：无有效 PCM 数据")
     }
-    return Result(ch0File, ch1File, totalOutSamples, sampleRate)
+    Log.i("AudioDecoder", "解码完成: rate=$sampleRate ch=$channelCount pcm=$pcmEncoding " +
+      "重采样=${resampler0 != null} 原始峰值=$rawDecodedPeak 写出峰值=$writtenPeak 样本=$totalOutSamples")
+    return Result(
+      ch0File, ch1File, totalOutSamples, sampleRate,
+      mime, channelCount, pcmEncoding, resampler0 != null,
+      rawDecodedPeak, writtenPeak,
+    )
   }
 
   private fun writePlanar(out: FileOutputStream, floats: FloatArray, len: Int) {

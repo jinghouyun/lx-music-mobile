@@ -217,6 +217,18 @@ class VocalSepService : Service() {
       val decoded = decoder.decode(job.audioPath, workDir)
       if (job.cancelled.get()) throw SeparationCancelledException()
 
+      // 解码静音自检：样本数正常但峰值≈0，说明 MediaCodec 没解出有效音频
+      // （常见于下载到的并非真实音频/加密流/位深不支持）。直接把完整格式信息抛给 UI。
+      if (decoded.writtenPeak < 1e-5f) {
+        throw RuntimeException(
+          "解码结果静音(峰值=${"%.6f".format(decoded.writtenPeak)})：" +
+            "格式=${decoded.mime}, ${decoded.srcRate}Hz, ${decoded.channels}声道, " +
+            "pcm=${decoded.pcmEncoding}, 重采样=${decoded.resamplerUsed}, " +
+            "原始峰值=${"%.4f".format(decoded.rawDecodedPeak)}, " +
+            "文件=${File(job.audioPath).length()}字节",
+        )
+      }
+
       emit(job.songId, "inferring", 0.0, "正在分离人声…")
       var backendTag = ""
       engine = DemucsSeparator(job.modelPath, job.ep) { fraction, _ ->
