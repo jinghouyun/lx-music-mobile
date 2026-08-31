@@ -114,6 +114,14 @@
 - [x] **关键坑：图优化必须关**（`OptLevel.NO_OPT`）——fp16 模型在 BASIC/ALL 优化期 Cast 折叠导致加载峰值 3.3GB（会杀进程），NO_OPT 仅 0.39GB；XNNPACK/NNAPI EP 不受影响。
 - [x] ORT Java 1.21 API 签名：`addXnnpack(Map<String,String>)`（空 Map 即可）、`addNnapi()` 无参。
 
+### 阶段 3 已完成（2026-08-31）
+- [x] **原生双轨混音引擎** `MixPlayerEngine.kt`：单 AudioTrack 输出（双轨采样级同步，无 ExoPlayer 双实例漂移）；双路 WAV mmap 读取（**必须 LITTLE_ENDIAN**）；伴奏模式 `out=acc + vocal*(1-strength)`、纯人声 `out=vocal`，强度实时可调；播放/暂停/seek/同步。
+- [x] **时钟架构**：TrackPlayer 始终是主时钟（进度条/seek/切歌/通知栏/自动下一首全部免费复用）。伴奏/人声模式下 TrackPlayer 音量置 0 照常播放，`MixPlayerModule.syncTo(posMs, isPlaying)` 每 500ms 跟随：落后 >300ms 追赶、超前 >600ms（TP 缓冲）暂停等待。
+- [x] **JS 协调核心** `src/core/vocalSeparation/`：三档模式（原唱/伴奏/纯人声）、强度持久化（AsyncStorage）、切歌模式保持（已缓存立即混音，未缓存播原唱+后台分离+完成自动切换）、混音结束/异常自动回原唱并恢复音量。
+- [x] **播放页 UI**：竖屏 MoreBtn 栏「循环」与「评论」之间新增麦克风按钮（MaterialCommunityIcons 字体已入 `assets/fonts/`）；点击弹出底部面板：三档切换 + 去人声强度滑块（0-100%）+ 分离进度条；横屏 MoreBtn 列同步接入。生效时按钮品牌绿高亮。
+- [x] **设置 → 其他 → 人声分离缓存**：显示已分离首数/占用，一键清理（清理前自动停止混音并恢复音量）。
+- [x] CI 构建成功（Run 33347743445），APK 已验证含 MixPlayer/MaterialCommunityIcons/libonnxruntime，arm64 APK 发布至 apk 分支。
+
 ---
 
 ## 5. 已踩过的坑（务必规避，省大量时间）
