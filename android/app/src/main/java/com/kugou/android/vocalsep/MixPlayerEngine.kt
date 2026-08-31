@@ -154,6 +154,14 @@ class MixPlayerEngine {
       ended = false
       require(totalFrames > 0) { "音轨数据为空(totalFrames=0)" }
 
+      // 诊断：扫描两路峰值，区分"播放器没出声"与"分离结果本身是静音"
+      val vPeak = peakAbs(vocalsBuf!!)
+      val aPeak = peakAbs(accBuf!!)
+      Log.i(TAG, "prepare: 峰值 vPeak=$vPeak aPeak=$aPeak")
+      if (vPeak == 0 && aPeak == 0) {
+        throw IllegalStateException("分离结果为静音(vPeak=0,aPeak=0)，属推理/输出问题")
+      }
+
       val minBuf = AudioTrack.getMinBufferSize(
         SAMPLE_RATE,
         AudioFormat.CHANNEL_OUT_STEREO,
@@ -282,6 +290,22 @@ class MixPlayerEngine {
       Log.e(TAG, "renderLoop 异常", t)
       onError?.invoke(t.message ?: t.javaClass.simpleName)
     }
+  }
+
+  /** 扫描音轨峰值振幅（抽样步进，秒级完成），用于诊断分离结果是否静音 */
+  private fun peakAbs(buf: ShortBuffer): Int {
+    val n = buf.limit()
+    if (n <= 0) return 0
+    var peak = 0
+    var i = 0
+    val step = 16
+    while (i < n) {
+      val v = buf.get(i).toInt()
+      val a = if (v < 0) -v else v
+      if (a > peak) peak = a
+      i += step
+    }
+    return peak
   }
 
   private fun readStem(buf: ShortBuffer, startFrame: Long, frames: Int, out: ShortArray) {
