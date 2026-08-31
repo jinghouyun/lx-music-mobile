@@ -62,6 +62,8 @@ class DemucsSeparator(
   /** 实际生效的 XNNPACK / ORT-CPU 线程池大小（open() 后填充） */
   private var xnnThreads = 1
   private var cpuThreads = 1
+  /** EP 初始化/回退过程中的诊断信息（便于确认为何没走 XNNPACK） */
+  private var epDiag = ""
 
   /** 供通知栏/UI 展示的后端标签，便于在真机上确认加速是否真的生效 */
   val backendInfo: String
@@ -111,12 +113,21 @@ class DemucsSeparator(
   }
 
   private fun setupEp(opts: OrtSession.SessionOptions): String {
-    // 优先用户指定，失败按 xnnpack -> cpu 回退
+    // 后台线程优先级：推理线程提优先级，避免锁屏/后台时被系统压到极低频
+    try {
+      android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
+    } catch (_: Throwable) {}
+
+    // 回退顺序（关键）：XNNPACK 失败后直接回纯 CPU，不再走 NNAPI。
+    // 原因：htdemucs 含大量 LSTM/Transformer/动态形状算子，NNAPI 大多不支持、回退 CPU，
+    // 还倒贴 NNAPI<->CPU 的张量拷贝与分区开销，实测比纯 CPU 更慢。
+    // NNAPI 仅在用户显式指定时才尝试。
     val order = when (ep) {
-      "nnapi" -> listOf("nnapi", "xnnpack", "cpu")
-      "cpu" -> listOf("cpu")
-      else -> listOf("xnnpack", "nnapi", "cpu")
+      "nnapi" -> listOf("nnapi", "cpu")
+      "xnnpack" -> listOf("xnnpack", "cpu")
+      else -> listOf("cpu")
     }
+    val diags = StringBuilder()
     for (name in order) {
       try {
         when (name) {
@@ -126,13 +137,22 @@ class DemucsSeparator(
             mapOf("intra_op_num_threads" to xnnThreads.toString()),
           )
           "nnapi" -> tryEnableNnapi(opts)
-          "cpu" -> { /* 默认 */ }
+          "cpu" -> {
+            // 纯 CPU 路径：多核（大核优先由系统调度）
+            opts.setIntraOpNumThreads(cpuThreads)
+            opts.setInterOpNumThreads(1)
+          }
         }
+        epDiag = diags.toString()
+        Log.i(TAG, "EP 生效: $name (xnnThreads=$xnnThreads, cpuThreads=$cpuThreads) $epDiag")
         return name
       } catch (t: Throwable) {
-        // 该 EP 不可用，尝试下一个
+        // 记录每个 EP 失败原因（之前静默吞掉，导致 XNNPACK 没生效也无从知晓）
+        diags.append("[$name 失败: ${t.javaClass.simpleName}: ${t.message?.take(120)}] ")
+        Log.w(TAG, "EP $name 初始化失败，尝试下一个", t)
       }
     }
+    epDiag = diags.toString()
     return "cpu"
   }
 

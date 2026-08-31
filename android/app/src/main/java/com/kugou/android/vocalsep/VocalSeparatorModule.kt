@@ -1,5 +1,10 @@
 package com.kugou.android.vocalsep
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.File
@@ -50,8 +55,33 @@ class VocalSeparatorModule(
 
   @ReactMethod
   fun separate(modelPath: String, audioPath: String, songId: String, ep: String?) {
+    // 国产 ROM（vivo/小米等）锁屏后会冻结后台：首次分离时引导用户把 App 加入电池优化白名单
+    requestIgnoreBatteryOptimizationsOnce()
     // 委托前台 Service：保活 + 通知进度/取消 + 单 worker 队列（切歌自动取消旧任务）
     VocalSepService.start(reactContext, modelPath, audioPath, songId, ep ?: "xnnpack")
+  }
+
+  /**
+   * 首次分离时弹一次系统对话框，请求"忽略电池优化"。
+   * 这是 vivo OriginOS / 小米 MIUI 等保活的关键：否则即便有前台 Service + WakeLock，
+   * 锁屏一段时间后进程仍可能被系统冻结/杀死，导致分离中断、亮屏后重新开始。
+   * 用 SharedPreferences 保证只问一次，用户拒绝也不再打扰。
+   */
+  private fun requestIgnoreBatteryOptimizationsOnce() {
+    try {
+      val pm = reactContext.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+      if (pm.isIgnoringBatteryOptimizations(reactContext.packageName)) return
+      val prefs = reactContext.getSharedPreferences("vocalsep", Context.MODE_PRIVATE)
+      if (prefs.getBoolean("battery_opt_asked", false)) return
+      prefs.edit().putBoolean("battery_opt_asked", true).apply()
+      val activity = reactContext.currentActivity ?: return
+      @Suppress("BatteryLife")
+      val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+        data = Uri.parse("package:${reactContext.packageName}")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      activity.startActivity(intent)
+    } catch (_: Throwable) { /* 部分机型无该设置页，忽略 */ }
   }
 
   /** 取消当前分离任务并丢弃排队任务（切歌/切回原唱时调用） */

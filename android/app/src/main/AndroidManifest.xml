@@ -14,6 +14,8 @@
     <!-- targetSdk<34 时系统自动忽略；升到 34+ 后 dataSync 类型前台服务必需 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 人声分离后台推理：锁屏后持有 CPU 唤醒锁，避免 Doze 冻结/拖慢推理导致重跑 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-sdk tools:overrideLibrary="ai.onnxruntime" />
 

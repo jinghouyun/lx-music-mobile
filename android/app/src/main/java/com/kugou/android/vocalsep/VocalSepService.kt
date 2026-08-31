@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.Process
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
@@ -74,6 +75,7 @@ class VocalSepService : Service() {
   private var current: Job? = null
   private var pending: Job? = null
   private var workerAlive = false
+  private var wakeLock: PowerManager.WakeLock? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -81,11 +83,54 @@ class VocalSepService : Service() {
     super.onCreate()
     instance = this
     createChannel()
+    cleanupStaleArtifacts()
+    acquireWakeLock()
   }
 
   override fun onDestroy() {
+    releaseWakeLock()
     instance = null
     super.onDestroy()
+  }
+
+  /**
+   * 清理上次进程被系统杀死后残留的半成品：
+   *  - .work-* 临时解码目录（f32 声道文件）
+   *  - 各 songId 目录下未 rename 的 *.tmp（分离成功后才会改名为 .f32）
+   * 这些残留若不清，既占空间，也可能让"是否已分离"的判断出现脏数据。
+   */
+  private fun cleanupStaleArtifacts() {
+    try {
+      val root = File(filesDir, "vocalsep")
+      root.listFiles()?.forEach { f ->
+        if (f.isDirectory && f.name.startsWith(".work-")) f.deleteRecursively()
+      }
+      root.walkTopDown()
+        .filter { it.isFile && it.name.endsWith(".tmp") }
+        .forEach { runCatching { it.delete() } }
+    } catch (_: Throwable) { /* 清理失败不影响主流程 */ }
+  }
+
+  /**
+   * 持有 PARTIAL_WAKE_LOCK：锁屏/灭屏后阻止 CPU 进入 Doze 深度休眠，
+   * 保证后台推理线程持续跑（否则灭屏后 CPU 降频/挂起，分离会被拖慢甚至冻结，
+   * 亮屏回来看起来像"重新开始"）。带 15 分钟超时兜底，防止异常路径永久持锁。
+   */
+  private fun acquireWakeLock() {
+    try {
+      val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+      val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "lxmusic:vocalsep")
+      wl.setReferenceCounted(false)
+      wl.acquire(15 * 60 * 1000L)
+      wakeLock = wl
+    } catch (_: Throwable) { /* 部分机型限制，忽略 */ }
+  }
+
+  private fun releaseWakeLock() {
+    try {
+      wakeLock?.takeIf { it.isHeld }?.release()
+    } catch (_: Throwable) { /* 忽略 */ }
+    wakeLock = null
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -179,6 +224,7 @@ class VocalSepService : Service() {
       }
     } finally {
       synchronized(lock) { workerAlive = false }
+      releaseWakeLock()
       stopForeground(true)
       stopSelf()
     }
