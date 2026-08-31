@@ -90,7 +90,12 @@ class SincResampler(
   }
 
   private fun inputAt(globalPos: Long): Float {
-    if (globalPos < 0 || globalPos >= totalInput) return 0f // 零填充
+    // 关键：不能用 totalInput 做上界。流式阶段 totalInput = -1（总长未知，EOF 才设置），
+    // 若写 `globalPos >= totalInput`，流式期间等价于 `globalPos >= -1`，会把所有有效样本
+    // 误判为越界而返回 0 —— 重采样输出整段静音（48k→44.1k 的源全部踩中；44.1k 源不走
+    // 重采样故不受影响，这正是"酷狗能用、网易云静音"的原因）。
+    // 队列边界 idx>=qLen 已天然覆盖"未喂入 / 已丢弃 / EOF 后尾部零填充"三种情况。
+    if (globalPos < 0) return 0f // 头部前瞻零填充
     val idx = (globalPos - headInputPos).toInt()
     if (idx < 0 || idx >= qLen) return 0f
     return queue[qHead + idx]
