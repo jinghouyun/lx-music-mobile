@@ -28,6 +28,28 @@ const modelDir = `${RNFS.DocumentDirectoryPath}/models`
 const modelPath = `${modelDir}/${MODEL_FILE_NAME}`
 const audioCacheDir = `${RNFS.CachesDirectoryPath}/vocal_sep_audio`
 
+/**
+ * 把外部 songId 映射成定长、文件系统安全的缓存键。
+ *
+ * 必要：部分音源（如网易云临时 URL 音源）的 songId 会把整段下载 URL 编码进去，
+ * 长度可达 280+ 字符，直接用作文件名会超过文件系统 255 字节限制
+ * （RNFS 下载时 open `.download` 临时文件报 ENOENT）。
+ * cyrb53 哈希 -> 16 位 hex，同一首歌稳定、碰撞概率可忽略，纯 hex 无特殊字符。
+ */
+const cacheKeyOf = (songId: string): string => {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < songId.length; i++) {
+    const ch = songId.charCodeAt(i)
+    h1 = Math.imul(h1 ^ ch, 2654435761)
+    h2 = Math.imul(h2 ^ ch, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  const hex = (x: number) => (x >>> 0).toString(16).padStart(8, '0')
+  return `vs_${hex(h2)}${hex(h1)}`
+}
+
 export interface SeparateOptions {
   /** 歌曲稳定唯一 id（如 音源_songmid_quality），用作缓存键 */
   songId: string
@@ -130,9 +152,11 @@ const ensureLocalAudio = async(songId: string, url: string, ext: string, onProgr
  */
 export const separateSong = async(options: SeparateOptions): Promise<SeparateResult> => {
   const { songId, audioUrl, ext = 'mp3', onProgress, ep = 'xnnpack' } = options
+  // 文件系统/原生缓存一律用定长哈希键（原始 songId 可能超长，见 cacheKeyOf）
+  const cacheId = cacheKeyOf(songId)
 
   // 1. 已缓存直接返回
-  const cached = await vocalSeparator.getStemPaths(songId)
+  const cached = await vocalSeparator.getStemPaths(cacheId)
   if (cached) return { songId, ...cached }
 
   // 2. 模型
@@ -141,14 +165,14 @@ export const separateSong = async(options: SeparateOptions): Promise<SeparateRes
 
   // 3. 音频
   onProgress?.(0.3, 'downloading-audio')
-  const audioPath = await ensureLocalAudio(songId, audioUrl, ext, (f) =>
+  const audioPath = await ensureLocalAudio(cacheId, audioUrl, ext, (f) =>
     onProgress?.(0.3 + f * 0.1, 'downloading-audio', '正在获取音频…'))
 
   // 4. 原生分离（事件转 Promise）
   return await new Promise<SeparateResult>((resolve, reject) => {
     let settled = false
     const sub = vocalSeparator.addProgressListener((e) => {
-      if (e.songId !== songId) return
+      if (e.songId !== cacheId) return
       if (e.status === 'inferring') {
         // 解码占 0.4~0.5，推理占 0.5~1
         onProgress?.(0.5 + e.progress * 0.5, 'inferring', e.message)
@@ -158,7 +182,7 @@ export const separateSong = async(options: SeparateOptions): Promise<SeparateRes
         if (settled) return
         settled = true
         sub.remove()
-        vocalSeparator.getStemPaths(songId).then((paths) => {
+        vocalSeparator.getStemPaths(cacheId).then((paths) => {
           if (paths) resolve({ songId, ...paths })
           else reject(new Error('分离完成但找不到输出文件'))
         })
@@ -176,7 +200,7 @@ export const separateSong = async(options: SeparateOptions): Promise<SeparateRes
     })
 
     try {
-      vocalSeparator.separate(mPath, audioPath, songId, ep)
+      vocalSeparator.separate(mPath, audioPath, cacheId, ep)
     } catch (e) {
       sub.remove()
       reject(e)
@@ -198,12 +222,12 @@ export const cancelSeparation = () => {
 }
 
 export const isSongSeparated = (songId: string): Promise<boolean> =>
-  vocalSeparator.isCached(songId)
+  vocalSeparator.isCached(cacheKeyOf(songId))
 
 export const getStemPaths = (songId: string): Promise<StemPaths | null> =>
-  vocalSeparator.getStemPaths(songId)
+  vocalSeparator.getStemPaths(cacheKeyOf(songId))
 
 export const clearSeparationCache = (songId?: string): Promise<number> =>
-  vocalSeparator.clearCache(songId)
+  vocalSeparator.clearCache(songId ? cacheKeyOf(songId) : undefined)
 
 export const getSeparationCacheInfo = vocalSeparator.getCacheInfo
