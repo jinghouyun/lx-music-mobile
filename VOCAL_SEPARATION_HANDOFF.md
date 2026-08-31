@@ -35,7 +35,7 @@
 - 交付直链（gh-proxy，发用户前用 `curl -sI` 校验 HTTP 200 且 content-length 与文件字节一致）：
   - `https://gh-proxy.com/https://github.com/jinghouyun/lx-music-mobile/raw/apk/app.apk`
 - 另有 `apk-dist` 分支是历史遗留，本任务统一只用 `apk` 分支。
-- **快捷方式**：已新增 workflow `Deploy APK to apk branch`（`.github/workflows/deploy-apk.yml`），可手动触发，传入 Android Build 的 run_id，自动在 CI 内下载 artifact → 取 arm64 APK → 强推 apk 分支，省去本地下载上传的时间。
+- **快捷方式（已全自动）**：workflow `Deploy APK to apk branch`（`.github/workflows/deploy-apk.yml`）同时支持手动触发（传 run_id）与 `workflow_run` 自动触发——Android Build 成功后自动下载 arm64 APK → 强推 apk 分支。推 main 后无需任何手工操作，等两个 workflow 跑完直链即更新。
 
 ---
 
@@ -121,6 +121,16 @@
 - [x] **播放页 UI**：竖屏 MoreBtn 栏「循环」与「评论」之间新增麦克风按钮（MaterialCommunityIcons 字体已入 `assets/fonts/`）；点击弹出底部面板：三档切换 + 去人声强度滑块（0-100%）+ 分离进度条；横屏 MoreBtn 列同步接入。生效时按钮品牌绿高亮。
 - [x] **设置 → 其他 → 人声分离缓存**：显示已分离首数/占用，一键清理（清理前自动停止混音并恢复音量）。
 - [x] CI 构建成功（Run 33347743445），APK 已验证含 MixPlayer/MaterialCommunityIcons/libonnxruntime，arm64 APK 发布至 apk 分支。
+
+### 阶段 4 已完成（2026-08-31）— 调优与收尾
+- [x] **后台保活/取消**：新增 `VocalSepService.kt` 前台 Service（通知栏常驻 + 进度 + 取消按钮），单 Worker 任务队列：切歌/重选时旧任务置 cancel 标志（分块间检查 `SeparationCancelledException`，模型不跑废块），同歌重复任务直接忽略。JS `cancel()` 已接线，切歌自动取消旧分离。
+- [x] **线程提权**：Worker 线程 `THREAD_PRIORITY_FOREGROUND`（-2），推理线程绑大核（`Process.setThreadGroups`/affinity 可用时），AudioTrack 回调线程独立高优先级。
+- [x] **内存峰值控制**：`DemucsSeparator` 全流程缓冲复用（inBytes/chunkCh/readBuf/readTmp/s16Buf 只分配一次），内存峰值与歌曲长度无关，常驻 ~20MB；WavWriter 复用写缓冲。
+- [x] **去爆音**：`MixPlayerEngine` 增益斜坡（RAMP_FRAMES=2048，~46ms），模式/强度切换逐帧逼近目标增益，无台阶；分块拼接沿用三角窗 WOLA（阶段 2 已验证相关 0.9998），块边界无爆音。
+- [x] **事件级即时同步**：`notifyPlayerSeek`/播放/暂停钩子接入 `plugins/player/utils.ts`，seek 后立即硬跳 + syncTo，不再等 500ms 轮询。
+- [x] **重采样精度实测**（`/data/user/work/resample_test.py`，对拍 scipy resample_poly）：1k/17kHz 通带增益 ±0.01dB；带内 0–18kHz SNR ≈ 66dB；26kHz 深阻带折叠衰减 ≈ 74dB；升采样镜像 < -190dB；48k/96k/88.2k→44.1k 增益一致。
+- [x] **INT8 量化结论：放弃，保 FP16**。动态量化（per-channel QInt8）产出 94 个 `ConvInteger` 节点，**ORT CPU EP 无 ConvInteger 实现，会话直接创建失败**（NOT_IMPLEMENTED）；且体积仅 316→197MB（1.6x，LSTM/MatMul 占大头）。QDQ 静态量化需校准集且 LSTM 不量化，收益小风险高，不采用。线上继续用 165MB FP16 权重模型（FP32 运算）。
+- [x] **交付流水线自动化**：`deploy-apk.yml` 新增 `workflow_run` 触发——Android Build 成功后自动下载 arm64 APK 强推 `apk` 分支，无需手动 dispatch；直链不变：`https://gh-proxy.com/https://github.com/jinghouyun/lx-music-mobile/raw/apk/app.apk`。
 
 ---
 

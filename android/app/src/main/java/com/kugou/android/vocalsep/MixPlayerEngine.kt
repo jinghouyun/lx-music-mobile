@@ -32,10 +32,19 @@ class MixPlayerEngine {
     private const val SAMPLE_RATE = 44100
     private const val CHANNELS = 2
     private const val BUFFER_FRAMES = 2048
+    /** 增益斜坡长度（帧）：2048 帧 ≈ 46ms @44.1k，人耳感知为平滑渐变、无阶跃爆音 */
+    private const val RAMP_FRAMES = 2048
   }
 
   @Volatile private var mode = MODE_OFF
   @Volatile private var strength = 1.0f // 去人声强度 0..1
+
+  // 增益斜坡：目标值（setMode/setStrength 更新）-> 当前值（渲染循环逐帧逼近），
+  // 使模式切换/强度拖动无阶跃爆音
+  @Volatile private var targetVocalGain = 0f
+  @Volatile private var targetAccGain = 1f
+  private var curVocalGain = 0f
+  private var curAccGain = 1f
 
   private var audioTrack: AudioTrack? = null
   private var playThread: Thread? = null
@@ -205,19 +214,31 @@ class MixPlayerEngine {
         readStem(vBuf, writeStart, frames, vChunk)
         readStem(aBuf, writeStart, frames, aChunk)
 
-        val m = mode
-        val s = strength
-        for (i in 0 until frames * CHANNELS) {
-          val v = vChunk[i].toInt()
-          val a = aChunk[i].toInt()
-          var out = when (m) {
-            MODE_ACCOMPANIMENT -> a + (v * (1f - s)).toInt()
-            MODE_VOCALS -> v
-            else -> a + v // MODE_OFF 不应到这里，兜底全混音
+        // 增益斜坡：本块内从当前值线性逼近目标值（约 46ms 完成，人耳无阶跃）
+        val tAcc = targetAccGain
+        val tVocal = targetVocalGain
+        val ramp = min(frames, RAMP_FRAMES).toFloat()
+        val dAcc = (tAcc - curAccGain) / ramp
+        val dVocal = (tVocal - curVocalGain) / ramp
+
+        for (f in 0 until frames) {
+          if (f < RAMP_FRAMES) {
+            curAccGain += dAcc
+            curVocalGain += dVocal
+          } else {
+            curAccGain = tAcc
+            curVocalGain = tVocal
           }
-          if (out > 32767) out = 32767
-          if (out < -32768) out = -32768
-          mix[i] = out.toShort()
+          val gAcc = curAccGain
+          val gVocal = curVocalGain
+          for (c in 0 until CHANNELS) {
+            val i = f * CHANNELS + c
+            val out = aChunk[i].toFloat() * gAcc + vChunk[i].toFloat() * gVocal
+            var q = out.toInt()
+            if (q > 32767) q = 32767
+            if (q < -32768) q = -32768
+            mix[i] = q.toShort()
+          }
         }
 
         var offset = 0
@@ -247,13 +268,33 @@ class MixPlayerEngine {
     }
   }
 
+  /** 据当前 mode/strength 计算两路目标增益 */
+  private fun updateTargetGains() {
+    when (mode) {
+      MODE_ACCOMPANIMENT -> {
+        targetAccGain = 1f
+        targetVocalGain = (1f - strength).coerceIn(0f, 1f)
+      }
+      MODE_VOCALS -> {
+        targetAccGain = 0f
+        targetVocalGain = 1f
+      }
+      else -> {
+        targetAccGain = 1f
+        targetVocalGain = 1f
+      }
+    }
+  }
+
   fun setMode(newMode: Int) {
     mode = newMode
+    updateTargetGains()
   }
 
   /** strength: 0=人声全响（≈原唱） 1=纯伴奏 */
   fun setStrength(value: Float) {
     strength = value.coerceIn(0f, 1f)
+    updateTargetGains()
   }
 
   fun pause() {

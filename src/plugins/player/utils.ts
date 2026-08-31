@@ -3,6 +3,7 @@ import BackgroundTimer from 'react-native-background-timer'
 import { playMusic as handlePlayMusic } from './playList'
 import { existsFile, moveFile, privateStorageDirectoryPath, temporaryDirectoryPath } from '@/utils/fs'
 import { toast } from '@/utils/tools'
+import { notifyPlayerSeek } from '@/core/vocalSeparation'
 // import { PlayerMusicInfo } from '@/store/modules/player/playInfo'
 
 
@@ -165,7 +166,11 @@ export const setLoop = async(loop: boolean) => TrackPlayer.setRepeatMode(loop ? 
 
 export const setPause = async() => TrackPlayer.pause()
 // export const skipToNext = () => TrackPlayer.skipToNext()
-export const setCurrentTime = async(time: number) => TrackPlayer.seekTo(time)
+export const setCurrentTime = async(time: number) => {
+  await TrackPlayer.seekTo(time)
+  // 人声分离混音进行中：立即让双轨混音跟随跳转（事件级同步，不等 500ms 轮询）
+  notifyPlayerSeek(time)
+}
 export const setVolume = async(num: number) => TrackPlayer.setVolume(num)
 export const setPlaybackRate = async(num: number) => TrackPlayer.setRate(num)
 export interface NowPlayingTitles {

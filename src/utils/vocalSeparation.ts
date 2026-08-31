@@ -162,6 +162,11 @@ export const separateSong = async(options: SeparateOptions): Promise<SeparateRes
           if (paths) resolve({ songId, ...paths })
           else reject(new Error('分离完成但找不到输出文件'))
         })
+      } else if (e.status === 'cancelled') {
+        if (settled) return
+        settled = true
+        sub.remove()
+        reject(new SeparationCancelledError())
       } else if (e.status === 'error') {
         if (settled) return
         settled = true
@@ -177,6 +182,19 @@ export const separateSong = async(options: SeparateOptions): Promise<SeparateRes
       reject(e)
     }
   })
+}
+
+/** 分离被取消（切歌/切回原唱），非异常，UI 不弹错误 */
+export class SeparationCancelledError extends Error {
+  constructor() {
+    super('cancelled')
+    this.name = 'SeparationCancelledError'
+  }
+}
+
+/** 取消当前原生分离任务 */
+export const cancelSeparation = () => {
+  vocalSeparator.cancel()
 }
 
 export const isSongSeparated = (songId: string): Promise<boolean> =>

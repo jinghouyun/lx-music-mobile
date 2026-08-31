@@ -4,8 +4,8 @@ const { VocalSeparator } = NativeModules
 
 export interface VocalSepProgressEvent {
   songId: string
-  /** decoding | inferring | done | error */
-  status: 'decoding' | 'inferring' | 'done' | 'error'
+  /** decoding | inferring | done | error | cancelled */
+  status: 'decoding' | 'inferring' | 'done' | 'error' | 'cancelled'
   /** 0 ~ 1 */
   progress: number
   message?: string
@@ -39,6 +39,11 @@ export const vocalSeparator = {
    */
   separate(modelPath: string, audioPath: string, songId: string, ep: 'xnnpack' | 'nnapi' | 'cpu' = 'xnnpack') {
     VocalSeparator.separate(modelPath, audioPath, songId, ep)
+  },
+
+  /** 取消当前正在进行的分离任务（分块间隙生效，最多数秒延迟） */
+  cancel() {
+    VocalSeparator.cancel()
   },
 
   isCached(songId: string): Promise<boolean> {

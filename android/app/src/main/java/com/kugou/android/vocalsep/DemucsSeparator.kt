@@ -30,11 +30,16 @@ class DemucsSeparator(
 ) {
   companion object {
     const val SAMPLE_RATE = 44100
+    const val CHANNELS = 2
     const val SEGMENT_S = 7.8
     val N_SAMPLES = (SEGMENT_S * SAMPLE_RATE).toInt() // 343980
     val OVERLAP = N_SAMPLES / 4                        // 85995
     val STRIDE = N_SAMPLES - OVERLAP                   // 257985
   }
+
+  /** 用户/切歌取消标志：分块之间检查，取消后尽快退出并清理临时文件 */
+  @Volatile
+  var cancelled = false
 
   private lateinit var env: OrtEnvironment
   private lateinit var session: OrtSession
@@ -117,30 +122,37 @@ class DemucsSeparator(
     wavV.open()
     wavA.open()
 
-    // 流式 OLA 累加缓冲
-    val accV0 = FloatArray(N_SAMPLES)
-    val accV1 = FloatArray(N_SAMPLES)
-    val accA0 = FloatArray(N_SAMPLES)
-    val accA1 = FloatArray(N_SAMPLES)
-    val wacc = FloatArray(N_SAMPLES)
+    try {
+      // 流式 OLA 累加缓冲
+      val accV0 = FloatArray(N_SAMPLES)
+      val accV1 = FloatArray(N_SAMPLES)
+      val accA0 = FloatArray(N_SAMPLES)
+      val accA1 = FloatArray(N_SAMPLES)
+      val wacc = FloatArray(N_SAMPLES)
 
-    val nChunks = maxOf(1, ((totalSamples + STRIDE - 1) / STRIDE).toInt())
-    var flushed = 0L
+      val nChunks = maxOf(1, ((totalSamples + STRIDE - 1) / STRIDE).toInt())
+      var flushed = 0L
 
-    // 复用的输入缓冲
-    val inBytes = ByteBuffer.allocateDirect(2 * N_SAMPLES * 4).order(ByteOrder.nativeOrder())
-    val chunkCh = FloatArray(N_SAMPLES)
+      // 复用的输入/输出缓冲（整个分离过程只分配一次，内存峰值与歌曲长度无关）
+      val inBytes = ByteBuffer.allocateDirect(2 * N_SAMPLES * 4).order(ByteOrder.nativeOrder())
+      val chunkCh = FloatArray(N_SAMPLES)
+      // 读盘缓冲：readChannel 复用，避免每块每声道分配 1.4MB
+      val readBuf = ByteBuffer.allocate(N_SAMPLES * 4).order(ByteOrder.LITTLE_ENDIAN)
+      val readTmp = ByteArray(N_SAMPLES * 4)
+      // s16 输出缓冲：vocals/acc 各写一次，最大 N_SAMPLES*2ch*2B
+      val s16Buf = ByteArray(N_SAMPLES * CHANNELS * 2)
 
-    for (i in 0 until nChunks) {
-      val start = i.toLong() * STRIDE
+      for (i in 0 until nChunks) {
+        if (cancelled) throw SeparationCancelledException()
+        val start = i.toLong() * STRIDE
       val end = minOf(start + N_SAMPLES, totalSamples)
       val clen = (end - start).toInt()
 
       inBytes.clear()
       val inFb = inBytes.asFloatBuffer()
-      readChannel(raf0, start, clen, chunkCh)
+      readChannel(raf0, start, clen, chunkCh, readBuf, readTmp)
       inFb.put(chunkCh, 0, N_SAMPLES)
-      readChannel(raf1, start, clen, chunkCh)
+      readChannel(raf1, start, clen, chunkCh, readBuf, readTmp)
       inFb.put(chunkCh, 0, N_SAMPLES)
       inFb.flip()
 
@@ -173,26 +185,28 @@ class DemucsSeparator(
         }
       }
 
-      // 写出已确定区域 [0, flushLen)
+      // 写出已确定区域 [0, flushLen)，复用 s16Buf（vocals/acc 各一次）
       val flushLen = if (i == nChunks - 1) {
         (totalSamples - flushed).toInt()
       } else {
         STRIDE
       }
-      val outBuf = ByteBuffer.allocate(flushLen * 2 * 2).order(ByteOrder.LITTLE_ENDIAN)
+      val outBytes = flushLen * CHANNELS * 2
+      val outBuf = ByteBuffer.wrap(s16Buf).order(ByteOrder.LITTLE_ENDIAN)
+      outBuf.clear()
       for (s in 0 until flushLen) {
         val wt = wacc[s].coerceAtLeast(1e-8f)
         putS16(outBuf, accV0[s] / wt)
         putS16(outBuf, accV1[s] / wt)
       }
-      wavV.write(outBuf.array())
+      wavV.write(s16Buf, outBytes)
       outBuf.clear()
       for (s in 0 until flushLen) {
         val wt = wacc[s].coerceAtLeast(1e-8f)
         putS16(outBuf, accA0[s] / wt)
         putS16(outBuf, accA1[s] / wt)
       }
-      wavA.write(outBuf.array())
+      wavA.write(s16Buf, outBytes)
       flushed += flushLen
 
       // 把重叠尾部 [flushLen, N) 平移到头部，清空其余
@@ -205,18 +219,28 @@ class DemucsSeparator(
       }
 
       onProgress((i + 1).toDouble() / nChunks, "inferring")
+      }
+
+      raf0.close()
+      raf1.close()
+      wavV.close()
+      wavA.close()
+
+      val vocalsWav = File(outDir, "vocals.wav")
+      val accWav = File(outDir, "accompaniment.wav")
+      tmpVocals.renameTo(vocalsWav)
+      tmpAcc.renameTo(accWav)
+      return Pair(vocalsWav, accWav)
+    } catch (t: Throwable) {
+      // 取消/失败：关闭句柄并删除半截临时文件，避免残留损坏缓存
+      try { raf0.close() } catch (_: Exception) {}
+      try { raf1.close() } catch (_: Exception) {}
+      try { wavV.close() } catch (_: Exception) {}
+      try { wavA.close() } catch (_: Exception) {}
+      tmpVocals.delete()
+      tmpAcc.delete()
+      throw t
     }
-
-    raf0.close()
-    raf1.close()
-    wavV.close()
-    wavA.close()
-
-    val vocalsWav = File(outDir, "vocals.wav")
-    val accWav = File(outDir, "accompaniment.wav")
-    tmpVocals.renameTo(vocalsWav)
-    tmpAcc.renameTo(accWav)
-    return Pair(vocalsWav, accWav)
   }
 
   private fun shiftTail(arr: FloatArray, flushLen: Int) {
@@ -231,19 +255,31 @@ class DemucsSeparator(
     java.util.Arrays.fill(arr, tail, N_SAMPLES, 0f)
   }
 
-  /** 从平面 f32 文件读取 [start, start+clen)，不足补零；输出长度 N_SAMPLES */
-  private fun readChannel(raf: RandomAccessFile, start: Long, clen: Int, out: FloatArray) {
-    val bb = ByteBuffer.allocate(N_SAMPLES * 4).order(ByteOrder.LITTLE_ENDIAN)
+  /**
+   * 从平面 f32 文件读取 [start, start+clen)，不足补零；输出长度 N_SAMPLES。
+   * bb/tmp 由调用方复用（跨块不重新分配），bb 容量必须 >= N_SAMPLES*4。
+   */
+  private fun readChannel(
+    raf: RandomAccessFile,
+    start: Long,
+    clen: Int,
+    out: FloatArray,
+    bb: ByteBuffer,
+    tmp: ByteArray,
+  ) {
+    bb.clear()
+    java.util.Arrays.fill(tmp, 0)
     raf.seek(start * 4)
     var read = 0
-    val tmp = ByteArray(clen * 4)
-    while (read < tmp.size) {
-      val r = raf.read(tmp, read, tmp.size - read)
+    val want = clen * 4
+    while (read < want) {
+      val r = raf.read(tmp, read, want - read)
       if (r < 0) break
       read += r
     }
-    bb.put(tmp, 0, read)
-    // 剩余补零（bb 已初始化为 0）
+    bb.put(tmp, 0, tmp.size)
+    // 剩余补零（bb clear 后未写部分随 out 初值为 0）
+    bb.flip()
     val fb = bb.asFloatBuffer()
     fb.get(out, 0, N_SAMPLES)
   }

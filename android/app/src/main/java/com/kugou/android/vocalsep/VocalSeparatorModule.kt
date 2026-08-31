@@ -19,7 +19,15 @@ class VocalSeparatorModule(
 
   override fun getName() = "VocalSeparator"
 
-  private val running = java.util.concurrent.atomic.AtomicBoolean(false)
+  init {
+    // Service 回调 -> RN 事件（同进程）；任务串行/取消/排队都由 Service 内部队列保证
+    VocalSepService.eventListener = { songId, status, fraction, message ->
+      if (status == "inferring" || status == "decoding" ||
+        status == "done" || status == "error" || status == "cancelled") {
+        progress(songId, status, fraction, message)
+      }
+    }
+  }
 
   private fun cacheRoot(): File = File(reactContext.filesDir, "vocalsep")
 
@@ -42,55 +50,14 @@ class VocalSeparatorModule(
 
   @ReactMethod
   fun separate(modelPath: String, audioPath: String, songId: String, ep: String?) {
-    if (!running.compareAndSet(false, true)) {
-      progress(songId, "error", 0.0, "已有分离任务在进行中")
-      return
-    }
-    Thread {
-      try {
-        val outDir = songDir(songId)
-        // 已缓存则直接完成
-        val v = File(outDir, "vocals.wav")
-        val a = File(outDir, "accompaniment.wav")
-        if (v.exists() && a.exists()) {
-          progress(songId, "done", 1.0, "已缓存")
-          return@Thread
-        }
-        outDir.mkdirs()
+    // 委托前台 Service：保活 + 通知进度/取消 + 单 worker 队列（切歌自动取消旧任务）
+    VocalSepService.start(reactContext, modelPath, audioPath, songId, ep ?: "xnnpack")
+  }
 
-        val workDir = File(reactContext.cacheDir, "vocalsep_work/$songId")
-        workDir.mkdirs()
-
-        progress(songId, "decoding", 0.0, "正在解码音频…")
-        val decoder = AudioDecoder()
-        val decoded = decoder.decode(audioPath, workDir)
-
-        progress(songId, "inferring", 0.0, "正在分离人声…")
-        val engine = DemucsSeparator(
-          modelPath,
-          ep ?: "xnnpack",
-        ) { fraction, _ ->
-          progress(songId, "inferring", fraction, "正在分离人声… ${(fraction * 100).toInt()}%")
-        }
-        engine.open()
-        try {
-          engine.separate(decoded.ch0File, decoded.ch1File, decoded.samples, outDir)
-        } finally {
-          engine.close()
-        }
-
-        // 清理临时文件
-        decoded.ch0File.delete()
-        decoded.ch1File.delete()
-        workDir.delete()
-
-        progress(songId, "done", 1.0, "分离完成")
-      } catch (t: Throwable) {
-        progress(songId, "error", 0.0, t.message ?: t.javaClass.simpleName)
-      } finally {
-        running.set(false)
-      }
-    }.start()
+  /** 取消当前分离任务并丢弃排队任务（切歌/切回原唱时调用） */
+  @ReactMethod
+  fun cancel() {
+    VocalSepService.requestCancel()
   }
 
   @ReactMethod

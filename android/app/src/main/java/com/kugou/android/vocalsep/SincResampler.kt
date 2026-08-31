@@ -6,10 +6,14 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * 高质量流式重采样器（Kaiser 窗 sinc 插值，32 taps，~90dB 阻带衰减）。
+ * 高质量流式重采样器（Kaiser 窗 sinc 插值，32 taps，beta=8.56）。
  *
  * 单声道 Float32 输入输出。内部维护一个小队列，只缓存半个核长度的前瞻样本，
  * 因此整曲处理也只占固定内存。
+ *
+ * 精度（48k↔44.1k 实测，对拍 scipy resample_poly）：
+ *   通带 1k/17kHz 增益 ±0.01dB；带内(0-18kHz) SNR ≈ 66dB；
+ *   深阻带 26kHz 折叠衰减 ≈ 74dB；升采样镜像 < -190dB。
  *
  * 参考实现：标准的窗函数 sinc 重采样（libsamplerate 同类算法的简化版）。
  */
@@ -18,7 +22,7 @@ class SincResampler(
   private val outRate: Int,
 ) {
   private val halfTaps = 16
-  private val beta = 8.5569 // Kaiser beta，约 90dB 阻带
+  private val beta = 8.5569 // Kaiser beta（标称 ~90dB 阻带；32 taps 实测深阻带 ~74dB）
   private val cutoff = minOf(inRate, outRate) * 0.5
 
   // 输入队列（数组 + 头偏移 + 长度）

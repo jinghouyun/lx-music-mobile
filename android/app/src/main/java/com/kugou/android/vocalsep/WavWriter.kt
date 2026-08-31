@@ -25,6 +25,12 @@ class WavWriter(private val file: File) {
     dataBytes += pcm.size
   }
 
+  /** 写入复用缓冲的前 [len] 字节 */
+  fun write(pcm: ByteArray, len: Int) {
+    raf?.write(pcm, 0, len)
+    dataBytes += len
+  }
+
   fun close() {
     val r = raf ?: return
     r.seek(0)

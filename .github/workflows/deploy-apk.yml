@@ -6,19 +6,34 @@ on:
       run_id:
         description: 'Workflow run ID to download artifact from'
         required: true
+  workflow_run:
+    workflows: ["Android Build"]
+    types: [completed]
 
 jobs:
   deploy:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
       actions: read
     steps:
+      - name: Resolve source run id
+        id: src
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_id=${{ github.event.inputs.run_id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download artifact
         run: |
           curl -L -o app-release.zip \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.event.inputs.run_id }}/artifacts" | python3 -c "import sys,json; print(json.load(sys.stdin)['artifacts'][0]['id'])")/zip"
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ steps.src.outputs.run_id }}/artifacts" | python3 -c "import sys,json; print(json.load(sys.stdin)['artifacts'][0]['id'])")/zip"
           unzip -l app-release.zip
 
       - name: Extract arm64-v8a APK
