@@ -44,6 +44,17 @@ class DemucsSeparator(
   private lateinit var env: OrtEnvironment
   private lateinit var session: OrtSession
   private var actualEp = "cpu"
+  /** 实际生效的 XNNPACK / ORT-CPU 线程池大小（open() 后填充） */
+  private var xnnThreads = 1
+  private var cpuThreads = 1
+
+  /** 供通知栏/UI 展示的后端标签，便于在真机上确认加速是否真的生效 */
+  val backendInfo: String
+    get() = when (actualEp) {
+      "xnnpack" -> "XNNPACK ${xnnThreads}线程"
+      "nnapi" -> "NNAPI"
+      else -> "CPU ${cpuThreads}线程"
+    }
 
   private val window = FloatArray(N_SAMPLES)
 
@@ -64,8 +75,21 @@ class DemucsSeparator(
     // 3GB+ 内存峰值（x86 实测 BASIC 峰值 3.3GB，NO_OPT 仅 0.39GB），低端机
     // 会被系统直接杀掉。NO_OPT 下 XNNPACK/NNAPI EP 仍按算子正常接管。
     opts.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
-    val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
-    opts.setIntraOpNumThreads(threads)
+
+    // 骁龙 8 Gen 2 等 big.LITTLE 机型无 SMT，availableProcessors() 即在线物理核数。
+    val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
+    // 关键性能修复：XNNPACK 自带独立线程池，其 intra_op_num_threads 默认值是 1！
+    // 旧代码 addXnnpack(emptyMap()) 没传该参数，导致 Conv/Gemm/MatMul（htdemucs
+    // 编码器/解码器卷积）全部单线程执行——这是真机 ~5 分钟/首的首要原因。
+    // 官方建议把 XNNPACK 池设为物理核数。
+    xnnThreads = cores.coerceAtMost(8)
+    // ORT CPU EP 线程池：跑 XNNPACK 不支持的算子（BiLSTM、注意力、各类激活）。
+    // 旧代码 coerceIn(2, 4) 把它锁死在 4 线程，八核旗舰只用到一半算力。
+    cpuThreads = cores.coerceAtMost(8)
+    opts.setIntraOpNumThreads(cpuThreads)
+    // XNNPACK 池与 ORT 池相互独立；单次推理节点顺序执行、同一时刻只有一个池在工作，
+    // 关闭 ORT 池忙等可避免另一个池计算时本池线程空转抢核（XNNPACK 官方推荐配置）。
+    try { opts.addConfigEntry("session.intra_op.allow_spinning", "0") } catch (_: Throwable) {}
 
     actualEp = setupEp(opts)
     session = env.createSession(modelPath, opts)
@@ -81,8 +105,11 @@ class DemucsSeparator(
     for (name in order) {
       try {
         when (name) {
-          // ORT 1.21 Java 的 addXnnpack 接受 EP 选项 Map；线程数由 setIntraOpNumThreads 控制
-          "xnnpack" -> opts.addXnnpack(emptyMap())
+          // ORT 1.21 Java 的 addXnnpack 接受 EP 选项 Map；必须显式传 intra_op_num_threads，
+          // 否则 XNNPACK 内部线程池默认只有 1 线程，卷积/矩阵乘退化为单线程。
+          "xnnpack" -> opts.addXnnpack(
+            mapOf("intra_op_num_threads" to xnnThreads.toString()),
+          )
           "nnapi" -> tryEnableNnapi(opts)
           "cpu" -> { /* 默认 */ }
         }

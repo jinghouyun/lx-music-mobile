@@ -206,13 +206,17 @@ class VocalSepService : Service() {
       if (job.cancelled.get()) throw SeparationCancelledException()
 
       emit(job.songId, "inferring", 0.0, "正在分离人声…")
+      var backendTag = ""
       engine = DemucsSeparator(job.modelPath, job.ep) { fraction, _ ->
         if (job.cancelled.get()) engine?.cancelled = true
         val pct = (fraction * 100).toInt()
-        emit(job.songId, "inferring", fraction, "正在分离人声… $pct%")
-        updateNotification(pct, "AI 分离中 $pct%")
+        emit(job.songId, "inferring", fraction, "正在分离人声… $pct%$backendTag")
+        updateNotification(pct, "AI 分离中 $pct%$backendTag")
       }
       engine.open()
+      // 会话创建后实际后端/线程数才确定；透传到进度文案，真机上即可确认 XNNPACK 是否生效
+      backendTag = " · ${engine.backendInfo}"
+      emit(job.songId, "inferring", 0.0, "正在分离人声… 0%$backendTag")
       try {
         engine.separate(decoded.ch0File, decoded.ch1File, decoded.samples, outDir)
       } finally {
