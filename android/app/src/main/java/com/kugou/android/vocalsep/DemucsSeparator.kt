@@ -3,6 +3,7 @@ package com.kugou.android.vocalsep
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import android.util.Log
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
@@ -25,9 +26,12 @@ import java.util.Collections
  */
 class DemucsSeparator(
   private val modelPath: String,
-  private val ep: String, // "xnnpack" | "nnapi" | "cpu"
+  ep: String, // "xnnpack" | "nnapi" | "cpu"
   private val onProgress: (fraction: Double, stage: String) -> Unit,
 ) {
+  /** 当前后端：首块自检发现 XNNPACK/NNAPI 输出静音时，降级为 "cpu" 重建会话 */
+  private var ep: String = ep
+
   companion object {
     const val SAMPLE_RATE = 44100
     const val CHANNELS = 2
@@ -35,7 +39,18 @@ class DemucsSeparator(
     val N_SAMPLES = (SEGMENT_S * SAMPLE_RATE).toInt() // 343980
     val OVERLAP = N_SAMPLES / 4                        // 85995
     val STRIDE = N_SAMPLES - OVERLAP                   // 257985
+    private const val TAG = "DemucsSeparator"
+    /** 峰值低于此值判定为静音（正常音乐/模型输出峰值在 0.01~1.0 量级） */
+    private const val SILENCE_PEAK = 1e-4f
   }
+
+  /** 首块自检失败、需要换 CPU 后端重跑的内部控制信号 */
+  private class CpuFallback(
+    val inPeak: Float,
+    val outPeak: Float,
+    val nan: Boolean,
+    val backend: String,
+  ) : Exception()
 
   /** 用户/切歌取消标志：分块之间检查，取消后尽快退出并清理临时文件 */
   @Volatile
@@ -141,15 +156,60 @@ class DemucsSeparator(
   fun separate(ch0File: File, ch1File: File, totalSamples: Long, outDir: File): Pair<File, File> {
     val raf0 = RandomAccessFile(ch0File, "r")
     val raf1 = RandomAccessFile(ch1File, "r")
-
-    val tmpVocals = File(outDir, "vocals.wav.tmp")
-    val tmpAcc = File(outDir, "accompaniment.wav.tmp")
-    val wavV = WavWriter(tmpVocals)
-    val wavA = WavWriter(tmpAcc)
-    wavV.open()
-    wavA.open()
+    val vocalsWav = File(outDir, "vocals.wav")
+    val accWav = File(outDir, "accompaniment.wav")
 
     try {
+      while (true) {
+        val tmpVocals = File(outDir, "vocals.wav.tmp")
+        val tmpAcc = File(outDir, "accompaniment.wav.tmp")
+        val wavV = WavWriter(tmpVocals)
+        val wavA = WavWriter(tmpAcc)
+        wavV.open()
+        wavA.open()
+        try {
+          runPass(raf0, raf1, totalSamples, wavV, wavA)
+          wavV.close()
+          wavA.close()
+          tmpVocals.renameTo(vocalsWav)
+          tmpAcc.renameTo(accWav)
+          return Pair(vocalsWav, accWav)
+        } catch (fb: CpuFallback) {
+          // 首块自检发现当前后端输出全 0（真机上 XNNPACK 对该 FP16 图的已知数值异常）：
+          // 丢弃本遍半成品，关闭会话，用纯 CPU 后端重建后从头重跑。
+          try { wavV.close() } catch (_: Exception) {}
+          try { wavA.close() } catch (_: Exception) {}
+          tmpVocals.delete()
+          tmpAcc.delete()
+          Log.w(TAG, "后端 ${fb.backend} 首块输出静音" +
+            "(inPeak=${fb.inPeak},outPeak=${fb.outPeak},nan=${fb.nan})，降级纯 CPU 重跑")
+          try { close() } catch (_: Exception) {}
+          ep = "cpu"
+          open()
+          onProgress(0.0, "inferring")
+        } catch (t: Throwable) {
+          // 取消/致命错误：关闭句柄并删除半截临时文件，避免残留损坏缓存
+          try { wavV.close() } catch (_: Exception) {}
+          try { wavA.close() } catch (_: Exception) {}
+          tmpVocals.delete()
+          tmpAcc.delete()
+          throw t
+        }
+      }
+    } finally {
+      try { raf0.close() } catch (_: Exception) {}
+      try { raf1.close() } catch (_: Exception) {}
+    }
+  }
+
+  /** 单遍流式分离（首块含输入/输出峰值自检） */
+  private fun runPass(
+    raf0: RandomAccessFile,
+    raf1: RandomAccessFile,
+    totalSamples: Long,
+    wavV: WavWriter,
+    wavA: WavWriter,
+  ) {
       // 流式 OLA 累加缓冲
       val accV0 = FloatArray(N_SAMPLES)
       val accV1 = FloatArray(N_SAMPLES)
@@ -183,6 +243,22 @@ class DemucsSeparator(
       inFb.put(chunkCh, 0, N_SAMPLES)
       inFb.flip()
 
+      // 首块自检 1/2：输入峰值。若解码/重采样产出的是静音，模型输出必然全 0
+      var inPeak = 0f
+      if (i == 0) {
+        var k = 0
+        while (k < 2 * N_SAMPLES) {
+          val v = inFb.get(k)
+          val a = if (v < 0f) -v else v
+          if (a > inPeak) inPeak = a
+          k += 4
+        }
+        Log.i(TAG, "首块自检: 输入峰值=$inPeak 后端=$backendInfo")
+        if (inPeak < SILENCE_PEAK) {
+          throw RuntimeException("解码输入为静音(峰值=$inPeak)：音频解码/重采样未产出有效数据")
+        }
+      }
+
       val inputTensor = OnnxTensor.createTensor(env, inFb, longArrayOf(1, 2, N_SAMPLES.toLong()))
       val output = session.run(Collections.singletonMap("mix", inputTensor))
       inputTensor.close()
@@ -192,6 +268,31 @@ class DemucsSeparator(
           RuntimeException("模型输出中找不到 stems")
         } as OnnxTensor
         val sb: FloatBuffer = stemsTensor.floatBuffer
+        // 首块自检 2/2：输出峰值。XNNPACK/NNAPI 在部分机型上对该 FP16 图可能输出全 0/NaN，
+        // 此时降级纯 CPU 重跑（CpuFallback）；CPU 仍静音则属模型/图本身问题，直接报错。
+        if (i == 0) {
+          var outPeak = 0f
+          var nan = false
+          val tot = 4 * 2 * N_SAMPLES
+          var k = 0
+          while (k < tot) {
+            val v = sb.get(k)
+            if (v.isNaN()) nan = true
+            val a = if (v < 0f) -v else v
+            if (a > outPeak) outPeak = a
+            k += 7
+          }
+          Log.i(TAG, "首块自检: 输出峰值=$outPeak nan=$nan 后端=$backendInfo")
+          if (nan || outPeak < SILENCE_PEAK) {
+            if (actualEp != "cpu") {
+              throw CpuFallback(inPeak, outPeak, nan, backendInfo)
+            }
+            throw RuntimeException(
+              "模型输出为静音(输入峰值=${"%.3f".format(inPeak)}," +
+                "输出峰值=${"%.6f".format(outPeak)},nan=$nan,后端=$backendInfo)",
+            )
+          }
+        }
         // 布局 (1,4,2,N)：index = ((stem*2 + ch)*N + s)
         for (s in 0 until N_SAMPLES) {
           val w = window[s]
@@ -247,27 +348,6 @@ class DemucsSeparator(
 
       onProgress((i + 1).toDouble() / nChunks, "inferring")
       }
-
-      raf0.close()
-      raf1.close()
-      wavV.close()
-      wavA.close()
-
-      val vocalsWav = File(outDir, "vocals.wav")
-      val accWav = File(outDir, "accompaniment.wav")
-      tmpVocals.renameTo(vocalsWav)
-      tmpAcc.renameTo(accWav)
-      return Pair(vocalsWav, accWav)
-    } catch (t: Throwable) {
-      // 取消/失败：关闭句柄并删除半截临时文件，避免残留损坏缓存
-      try { raf0.close() } catch (_: Exception) {}
-      try { raf1.close() } catch (_: Exception) {}
-      try { wavV.close() } catch (_: Exception) {}
-      try { wavA.close() } catch (_: Exception) {}
-      tmpVocals.delete()
-      tmpAcc.delete()
-      throw t
-    }
   }
 
   private fun shiftTail(arr: FloatArray, flushLen: Int) {

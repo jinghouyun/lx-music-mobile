@@ -40,6 +40,9 @@ class VocalSepService : Service() {
     private const val CHANNEL_ID = "vocal_sep"
     private const val NOTIF_ID = 4721
 
+    /** 分离缓存版本：修复"输出全静音"问题后 bump，触发一次性旧缓存清理 */
+    private const val CACHE_VERSION = "silentfix1"
+
     /** Module 注册：把原生进度事件转发给 RN */
     @Volatile
     var eventListener: ((songId: String, status: String, fraction: Double, message: String?) -> Unit)? = null
@@ -189,6 +192,15 @@ class VocalSepService : Service() {
     var engine: DemucsSeparator? = null
     try {
       val outDir = File(filesDir, "vocalsep/${job.songId}")
+      // 缓存版本校验：旧版本曾产出全静音 WAV（XNNPACK 输出异常），升级后必须作废重算，
+      // 否则会一直命中"存在但静音"的坏缓存。版本号变化时清空整个缓存目录一次。
+      val sepRoot = File(filesDir, "vocalsep")
+      val verFile = File(sepRoot, ".cachever")
+      if (verFile.takeIf { it.exists() }?.readText() != CACHE_VERSION) {
+        sepRoot.listFiles()?.forEach { it.deleteRecursively() }
+        sepRoot.mkdirs()
+        verFile.writeText(CACHE_VERSION)
+      }
       val v = File(outDir, "vocals.wav")
       val a = File(outDir, "accompaniment.wav")
       if (v.exists() && a.exists()) {
