@@ -62,6 +62,11 @@ class MixPlayerEngine {
 
   // 位置记账：seek/flush 后 baseFrame = 起始帧，AudioTrack head 从 0 重新计
   @Volatile private var baseFrame = 0L
+  // 下一个待写入 AudioTrack 的绝对文件帧。STREAM 模式 write() 是 FIFO 追加，
+  // 读文件偏移必须按"已写入位置"推进；不能用 playbackHeadPosition（那是"已播放"
+  // 位置，落后一整个缓冲）——否则会把重复数据追加进缓冲，造成播放错位、丢实时性，
+  // 进而被 syncTo 反复 seek/flush 清空缓冲，硬件播不到连续声音（表现为无声）。
+  @Volatile private var nextFrame = 0L
   @Volatile private var ended = false
 
   var onEnded: (() -> Unit)? = null
@@ -171,6 +176,7 @@ class MixPlayerEngine {
   fun play(startMs: Long = 0) {
     val track = audioTrack ?: throw IllegalStateException("未 prepare")
     baseFrame = (startMs * SAMPLE_RATE / 1000).coerceAtLeast(0)
+    nextFrame = baseFrame
     ended = false
     if (baseFrame >= totalFrames) {
       onEnded?.invoke()
@@ -199,15 +205,22 @@ class MixPlayerEngine {
         if (!running) break
 
         val played = baseFrame + track.playbackHeadPosition.toLong()
-        if (played >= totalFrames) {
-          ended = true
-          onEnded?.invoke()
-          break
+
+        // 所有帧都已写入缓冲：等硬件把缓冲里剩余数据播完再报结束，避免截断尾声
+        if (nextFrame >= totalFrames) {
+          if (played >= totalFrames) {
+            ended = true
+            onEnded?.invoke()
+            break
+          }
+          try { Thread.sleep(20) } catch (_: InterruptedException) {}
+          continue
         }
 
-        // 本次要填充的帧区间
-        val writeStart = baseFrame + track.playbackHeadPosition.toLong()
-        var frames = min(BUFFER_FRAMES.toLong(), totalFrames - writeStart).toInt()
+        // 本次要填充的帧区间：严格按 nextFrame 顺序追加（write 为 FIFO 追加，
+        // 缓冲里 [head, nextFrame) 这段已写入待播放，不能重复写）。
+        val writeStart = nextFrame
+        val frames = min(BUFFER_FRAMES.toLong(), totalFrames - writeStart).toInt()
         if (frames <= 0) continue
 
         // 读两路（短于请求则补零）
@@ -248,6 +261,9 @@ class MixPlayerEngine {
           if (w <= 0) break
           offset += w
         }
+        // 整块写入完成后才推进读指针；若被 seek/flush 或取消打断（未写满），
+        // 不推进，下一轮按 nextFrame 重新对齐，避免跳帧。
+        if (offset >= totalShorts) nextFrame += frames
       }
     } catch (t: Throwable) {
       onError?.invoke(t.message ?: t.javaClass.simpleName)
@@ -317,6 +333,7 @@ class MixPlayerEngine {
     val track = audioTrack ?: return
     val frame = (ms * SAMPLE_RATE / 1000).coerceIn(0, max(0, totalFrames - 1))
     baseFrame = frame
+    nextFrame = frame
     track.pause()
     track.flush()
     if (!paused) track.play()

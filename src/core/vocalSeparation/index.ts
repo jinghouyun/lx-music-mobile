@@ -131,14 +131,24 @@ const startMix = async(mode: Exclude<VocalMode, 'original'>) => {
   if (!song) return
   const paths = await getStemPaths(song.id)
   if (!paths) return
-  stopMix()
-  const pos = await TrackPlayer.getPosition().catch(() => 0)
-  await vocalMixPlayer.prepare(paths.vocals, paths.accompaniment)
-  vocalMixPlayer.play(pos * 1000, mode === 'vocals' ? 2 : 1, state.strength)
-  await TrackPlayer.setVolume(0)
-  state.activeMode = mode
-  startSync()
-  emit()
+  try {
+    stopMix()
+    const pos = await TrackPlayer.getPosition().catch(() => 0)
+    await vocalMixPlayer.prepare(paths.vocals, paths.accompaniment)
+    vocalMixPlayer.play(pos * 1000, mode === 'vocals' ? 2 : 1, state.strength)
+    // 混音引擎确认启动后再把原唱静音，避免引擎没出声导致整首无声
+    await TrackPlayer.setVolume(0)
+    state.activeMode = mode
+    startSync()
+    emit()
+  } catch (e: any) {
+    // 混音启动失败：务必恢复原唱音量并提示，否则会出现"点伴奏/人声后没声音"
+    stopMix()
+    await TrackPlayer.setVolume(1).catch(() => {})
+    state.activeMode = 'original'
+    emit()
+    toast(`混音播放失败，已恢复原唱：${e?.message ?? e}`)
+  }
 }
 
 const backToOriginal = async() => {
