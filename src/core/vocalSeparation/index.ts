@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { toast } from '@/utils/tools'
 import { vocalMixPlayer } from '@/utils/nativeModules/vocalMixPlayer'
 import { getMusicUrl } from '@/core/music'
+import { getList } from '@/core/player/playInfo'
 import playerState from '@/store/player/state'
 import {
   separateSong,
@@ -71,19 +72,38 @@ let inited = false
 
 const sanitizeId = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_')
 
-const getCurrentSong = async(): Promise<{ id: string, url: string, musicInfo: LX.Music.MusicInfo | null } | null> => {
+/**
+ * 按真实歌曲 id 解析出完整歌曲对象（用于过期后重新取 URL）。
+ * 多来源兜底，覆盖"原源失效自动切备用源"等场景：
+ *  当前播放列表 → playMusicInfo → 稍后播放 → 已播列表。
+ * 返回 MusicInfo 或已下载项 ListItem（getMusicUrl 两者都接受）。
+ */
+const resolveMusicInfo = (realId: string): LX.Music.MusicInfo | LX.Download.ListItem | null => {
+  const inPlayerList = getList(playerState.playInfo.playerListId).find(m => String(m.id) === realId)
+  if (inPlayerList) return inPlayerList
+
+  const pmi = playerState.playMusicInfo?.musicInfo
+  if (pmi && String(pmi.id) === realId) return pmi as LX.Music.MusicInfo
+
+  const inTemp = playerState.tempPlayList.find(p => String(p.musicInfo.id) === realId)
+  if (inTemp) return inTemp.musicInfo
+
+  const inPlayed = playerState.playedList.find(p => String(p.musicInfo.id) === realId)
+  if (inPlayed) return inPlayed.musicInfo
+
+  return null
+}
+
+const getCurrentSong = async(): Promise<{ id: string, url: string, musicInfo: LX.Music.MusicInfo | LX.Download.ListItem | null } | null> => {
   try {
     const trackId = await TrackPlayer.getCurrentTrack()
     if (trackId == null) return null
     const track = await TrackPlayer.getTrack(trackId)
     if (!track || !track.url) return null
-    // 优先用播放器 store 里的完整歌曲对象（用于过期后重新取 URL）。
-    // 注意：在线临时音源 track.id 形如 `${id}__//随机__//url`，不能直接与 musicInfo.id 比，
+    // 在线临时音源 track.id 形如 `${id}__//随机__//url`，不能直接与 musicInfo.id 比，
     // Track 上的 musicId 字段才是真实歌曲 id（见 plugins/player/playList.ts buildTracks）。
     const realId = String((track as LX.Player.Track).musicId ?? track.id)
-    const mi = playerState.playMusicInfo?.musicInfo
-    const musicInfo = mi && String(mi.id) === realId ? mi as LX.Music.MusicInfo : null
-    return { id: sanitizeId(String(track.id)), url: track.url as string, musicInfo }
+    return { id: sanitizeId(String(track.id)), url: track.url as string, musicInfo: resolveMusicInfo(realId) }
   } catch {
     return null
   }
@@ -91,12 +111,18 @@ const getCurrentSong = async(): Promise<{ id: string, url: string, musicInfo: LX
 
 /**
  * 强制向音源重新请求一条新鲜的可播放地址。
- * 网易云等在线源的 CDN 地址带临时签名，播放一段时间后会过期（再下载返回 410/403）；
- * 播放器仍有声是因为早已缓冲，但分离需要重新下载完整文件，必须用新地址。
- * 失败时回退传入的旧地址。
+ * 各在线源（网易云/QQ/酷狗/酷我）的 CDN 地址普遍带临时签名，播放一段时间后会过期
+ * （再下载返回 410/403）；播放器仍有声是因为早已缓冲，但分离需重新下载完整文件。
+ * 这里走落雪统一的 getMusicUrl 分发，按 musicInfo.source 路由到对应音源，因此对所有
+ * 播放源通用。失败时回退传入的旧地址。
  */
-const refreshAudioUrl = async(musicInfo: LX.Music.MusicInfo | null, fallbackUrl: string): Promise<string> => {
-  if (!musicInfo || musicInfo.source === 'local') return fallbackUrl
+const refreshAudioUrl = async(
+  musicInfo: LX.Music.MusicInfo | LX.Download.ListItem | null,
+  fallbackUrl: string,
+): Promise<string> => {
+  if (!musicInfo) return fallbackUrl
+  // 本地文件 / 已下载歌曲：地址就是本地路径，不会过期，无需刷新
+  if (!('progress' in musicInfo) && musicInfo.source === 'local') return fallbackUrl
   try {
     // isRefresh 跳过缓存强制取新地址；允许切换备用源，最大化拿到可用文件
     const fresh = await getMusicUrl({ musicInfo, isRefresh: true })
@@ -192,7 +218,7 @@ const backToOriginal = async() => {
 
 // ---------------- 分离任务 ----------------
 
-const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Music.MusicInfo | null }) => {
+const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Music.MusicInfo | LX.Download.ListItem | null }) => {
   setTask({ status: 'downloading', progress: 0, songId: song.id, message: '准备中…' })
   try {
     // 主动刷新一次播放地址：track.url 是起播时取的临时签名地址，
