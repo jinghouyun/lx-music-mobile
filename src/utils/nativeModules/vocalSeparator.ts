@@ -28,6 +28,18 @@ export interface ExportedStem {
   path: string
 }
 
+export interface CacheExportResult {
+  path: string
+  songCount: number
+  totalBytes: number
+}
+
+export interface CacheImportResult {
+  importedCount: number
+  skippedCount: number
+  totalBytes: number
+}
+
 export type StemType = 'vocals' | 'accompaniment'
 
 type ProgressListener = (e: VocalSepProgressEvent) => void
@@ -80,6 +92,23 @@ export const vocalSeparator = {
    */
   exportStem(songId: string, stem: StemType, displayName: string): Promise<ExportedStem> {
     return VocalSeparator.exportStem(songId, stem, displayName)
+  },
+
+  /**
+   * 导出所有人声分离缓存为 zip 包。
+   * @param targetDirPath 目标目录绝对路径
+   * @param fileName      不含 .zip 后缀的文件名
+   */
+  exportCache(targetDirPath: string, fileName: string): Promise<CacheExportResult> {
+    return VocalSeparator.exportCache(targetDirPath, fileName)
+  },
+
+  /**
+   * 从 zip 包导入人声分离缓存（已存在的歌曲会跳过不覆盖）。
+   * @param zipFilePath zip 文件绝对路径
+   */
+  importCache(zipFilePath: string): Promise<CacheImportResult> {
+    return VocalSeparator.importCache(zipFilePath)
   },
 
   addProgressListener(listener: ProgressListener) {

@@ -15,6 +15,9 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 /**
  * 人声分离原生模块。
@@ -162,6 +165,171 @@ class VocalSeparatorModule(
       s += if (f.isDirectory) dirSize(f) else f.length()
     }
     return s
+  }
+
+  /**
+   * 把所有人声分离缓存（每首歌的 vocals.wav + accompaniment.wav）打包成 zip。
+   *
+   * @param targetDirPath 目标目录（用户在 ChoosePath 里选的文件夹）
+   * @param fileName      不含 .zip 后缀的文件名，如 "vocal_sep_cache"
+   * 返回 { path, songCount, totalBytes }
+   */
+  @ReactMethod
+  fun exportCache(targetDirPath: String, fileName: String, promise: Promise) {
+    try {
+      val root = cacheRoot()
+      if (!root.exists()) {
+        promise.reject("E_NO_CACHE", "没有可导出的缓存")
+        return
+      }
+      val songs = root.listFiles()?.filter { d ->
+        File(d, "vocals.wav").exists() && File(d, "accompaniment.wav").exists()
+      } ?: emptyList()
+      if (songs.isEmpty()) {
+        promise.reject("E_NO_CACHE", "没有可导出的缓存")
+        return
+      }
+
+      val safeName = sanitizeFileName(fileName.ifBlank { "vocal_sep_cache" })
+      val outFile = File(targetDirPath, "$safeName.zip")
+      // 同名自动追加序号
+      var finalFile = outFile
+      var i = 1
+      while (finalFile.exists()) {
+        finalFile = File(targetDirPath, "$safeName ($i).zip")
+        i++
+      }
+
+      var totalBytes = 0L
+      ZipOutputStream(FileOutputStream(finalFile)).use { zos ->
+        val buf = ByteArray(8192)
+        for (songDir in songs) {
+          val songId = songDir.name
+          for (stem in arrayOf("vocals.wav", "accompaniment.wav")) {
+            val f = File(songDir, stem)
+            if (!f.exists()) continue
+            totalBytes += f.length()
+            val entry = ZipEntry("$songId/$stem")
+            zos.putNextEntry(entry)
+            FileInputStream(f).use { fis ->
+              var len: Int
+              while (fis.read(buf).also { len = it } > 0) {
+                zos.write(buf, 0, len)
+              }
+            }
+            zos.closeEntry()
+          }
+        }
+      }
+
+      val m = Arguments.createMap()
+      m.putString("path", finalFile.absolutePath)
+      m.putInt("songCount", songs.size)
+      m.putDouble("totalBytes", totalBytes.toDouble())
+      promise.resolve(m)
+    } catch (e: Throwable) {
+      promise.reject("E_EXPORT", "导出失败: ${e.message}", e)
+    }
+  }
+
+  /**
+   * 从 zip 包导入人声分离缓存，恢复到 filesDir/vocalsep/ 下。
+   * 已存在的歌曲会跳过（不覆盖），避免破坏已有缓存。
+   *
+   * @param zipFilePath zip 文件路径
+   * 返回 { importedCount, skippedCount, totalBytes }
+   */
+  @ReactMethod
+  fun importCache(zipFilePath: String, promise: Promise) {
+    try {
+      val zipFile = File(zipFilePath)
+      if (!zipFile.exists()) {
+        promise.reject("E_NO_FILE", "文件不存在")
+        return
+      }
+
+      val root = cacheRoot()
+      if (!root.exists()) root.mkdirs()
+
+      var importedCount = 0
+      var skippedCount = 0
+      var totalBytes = 0L
+      val buf = ByteArray(8192)
+      val tmpDir = File(root, "_import_tmp_${System.currentTimeMillis()}")
+      tmpDir.mkdirs()
+
+      try {
+        ZipInputStream(FileInputStream(zipFile)).use { zis ->
+          var entry: ZipEntry?
+          while (zis.nextEntry.also { entry = it } != null) {
+            val e = entry ?: continue
+            if (e.isDirectory) continue
+
+            val parts = e.name.split('/', limit = 2)
+            if (parts.size != 2) continue
+            val songId = parts[0]
+            val stemName = parts[1]
+            if (stemName != "vocals.wav" && stemName != "accompaniment.wav") continue
+
+            // 目标目录已存在完整缓存则跳过
+            val targetDir = File(root, songId)
+            val vExists = File(targetDir, "vocals.wav").exists()
+            val aExists = File(targetDir, "accompaniment.wav").exists()
+            if (vExists && aExists) {
+              // 累计两首 wav 才算一次 skip，但只在遇到第一首时记
+              if (stemName == "vocals.wav") skippedCount++
+              continue
+            }
+
+            // 先写到临时目录，两首都齐了再重命名过去（原子性）
+            val tmpSongDir = File(tmpDir, songId)
+            if (!tmpSongDir.exists()) tmpSongDir.mkdirs()
+            val tmpFile = File(tmpSongDir, stemName)
+            FileOutputStream(tmpFile).use { fos ->
+              var len: Int
+              while (zis.read(buf).also { len = it } > 0) {
+                fos.write(buf, 0, len)
+              }
+            }
+            totalBytes += tmpFile.length()
+
+            // 如果两首都写完了，把临时目录移到正式目录
+            if (File(tmpSongDir, "vocals.wav").exists() && File(tmpSongDir, "accompaniment.wav").exists()) {
+              if (!targetDir.exists()) {
+                tmpSongDir.renameTo(targetDir)
+                importedCount++
+              } else {
+                // 目标目录存在但不完整，合并文件
+                for (stem in arrayOf("vocals.wav", "accompaniment.wav")) {
+                  val src = File(tmpSongDir, stem)
+                  val dst = File(targetDir, stem)
+                  if (src.exists() && !dst.exists()) {
+                    src.copyTo(dst, overwrite = false)
+                  }
+                }
+                tmpSongDir.deleteRecursively()
+                // 如果之前只有一首不完整，这里也算一次导入
+                if (!vExists || !aExists) importedCount++
+              }
+            }
+          }
+        }
+
+        // 清理未配对的临时目录（zip 里只有一首 wav 的异常情况）
+        if (tmpDir.exists()) tmpDir.deleteRecursively()
+
+        val m = Arguments.createMap()
+        m.putInt("importedCount", importedCount)
+        m.putInt("skippedCount", skippedCount)
+        m.putDouble("totalBytes", totalBytes.toDouble())
+        promise.resolve(m)
+      } catch (e: Throwable) {
+        if (tmpDir.exists()) runCatching { tmpDir.deleteRecursively() }
+        throw e
+      }
+    } catch (e: Throwable) {
+      promise.reject("E_IMPORT", "导入失败: ${e.message}", e)
+    }
   }
 
   // NativeEventEmitter 在 Android 上要求的订阅桩方法

@@ -456,3 +456,13 @@ export const clearVocalCache = async(songId?: string) => {
 }
 
 export const getVocalCacheInfo = () => getSeparationCacheInfo()
+
+/** 导出人声分离缓存为 zip 包到指定目录 */
+export const exportVocalCache = (targetDirPath: string, fileName: string) => {
+  return vocalSeparator.exportCache(targetDirPath, fileName)
+}
+
+/** 从 zip 包导入人声分离缓存 */
+export const importVocalCache = (zipFilePath: string) => {
+  return vocalSeparator.importCache(zipFilePath)
+}
