@@ -4,8 +4,8 @@ const { VocalSeparator } = NativeModules
 
 export interface VocalSepProgressEvent {
   songId: string
-  /** decoding | inferring | done | error | cancelled */
-  status: 'decoding' | 'inferring' | 'done' | 'error' | 'cancelled'
+  /** queued（排队等待）| decoding | inferring | done | error | cancelled */
+  status: 'queued' | 'decoding' | 'inferring' | 'done' | 'error' | 'cancelled'
   /** 0 ~ 1 */
   progress: number
   message?: string
@@ -60,6 +60,23 @@ export const vocalSeparator = {
    */
   separate(modelPath: string, audioPath: string, songId: string, ep: 'xnnpack' | 'nnapi' | 'cpu' = 'xnnpack') {
     VocalSeparator.separate(modelPath, audioPath, songId, ep)
+  },
+
+  /**
+   * 提前启动前台服务保活（下载模型/音频期间调用），
+   * 避免锁屏或切后台后下载被系统冻结。无实际任务，60s 空闲自动停止。
+   */
+  warmup() {
+    VocalSeparator.warmup()
+  },
+
+  /**
+   * 把 JS 下载阶段（模型/音频）的进度同步到前台通知栏。
+   * @param stage    downloading-model | downloading-audio
+   * @param fraction 0 ~ 1
+   */
+  notifyProgress(stage: string, fraction: number, message?: string) {
+    VocalSeparator.notifyProgress(stage, fraction, message ?? '')
   },
 
   /** 取消当前正在进行的分离任务（分块间隙生效，最多数秒延迟） */

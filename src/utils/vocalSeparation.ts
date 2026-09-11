@@ -65,8 +65,8 @@ export interface SeparateOptions {
    * 不传则失败即报错。
    */
   refreshAudioUrl?: () => Promise<string>
-  /** 进度回调 0~1 */
-  onProgress?: (progress: number, stage: 'downloading-model' | 'downloading-audio' | 'decoding' | 'inferring', message?: string) => void
+  /** 进度回调 0~1；queued=有别的歌正在分离，本歌排队等待中 */
+  onProgress?: (progress: number, stage: 'downloading-model' | 'downloading-audio' | 'queued' | 'decoding' | 'inferring', message?: string) => void
   /** 执行提供者，默认 xnnpack */
   ep?: 'xnnpack' | 'nnapi' | 'cpu'
 }
@@ -193,21 +193,40 @@ export const separateSong = async(options: SeparateOptions): Promise<SeparateRes
   const cached = await vocalSeparator.getStemPaths(cacheId)
   if (cached) return { songId, ...cached }
 
+  // 下载前就启动前台服务保活：模型约 165MB，锁屏/切后台后没有前台服务，
+  // 国产 ROM 会冻结网络与 JS，导致下载停滞（看起来像"后台无法完成分离"）。
+  vocalSeparator.warmup()
+
+  // 下载阶段进度同时转发到通知栏（原生解码/推理开始后通知由 Service 自行渲染）
+  const notifyExternal = (fraction: number, stage: 'downloading-model' | 'downloading-audio') => {
+    vocalSeparator.notifyProgress(stage, fraction)
+  }
+
   // 2. 模型
   onProgress?.(0, 'downloading-model')
-  const mPath = await ensureModel((f) => onProgress?.(f * 0.3, 'downloading-model', '正在下载人声分离模型…'))
+  notifyExternal(0, 'downloading-model')
+  const mPath = await ensureModel((f) => {
+    onProgress?.(f * 0.3, 'downloading-model', '正在下载人声分离模型…')
+    notifyExternal(f, 'downloading-model')
+  })
 
   // 3. 音频（URL 可能已过期，下载器内部会在失败时用 refreshAudioUrl 刷新重试）
   onProgress?.(0.3, 'downloading-audio')
-  const audioPath = await ensureLocalAudio(cacheId, audioUrl, refreshAudioUrl, (f) =>
-    onProgress?.(0.3 + f * 0.1, 'downloading-audio', '正在获取音频…'))
+  notifyExternal(0, 'downloading-audio')
+  const audioPath = await ensureLocalAudio(cacheId, audioUrl, refreshAudioUrl, (f) => {
+    onProgress?.(0.3 + f * 0.1, 'downloading-audio', '正在获取音频…')
+    notifyExternal(f, 'downloading-audio')
+  })
 
   // 4. 原生分离（事件转 Promise）
   return await new Promise<SeparateResult>((resolve, reject) => {
     let settled = false
     const sub = vocalSeparator.addProgressListener((e) => {
       if (e.songId !== cacheId) return
-      if (e.status === 'inferring') {
+      if (e.status === 'queued') {
+        // 有别的歌正在分离，本歌排队中（Promise 继续保持，等最终结果）
+        onProgress?.(0, 'queued', e.message ?? '排队中…')
+      } else if (e.status === 'inferring') {
         // 解码占 0.4~0.5，推理占 0.5~1
         onProgress?.(0.5 + e.progress * 0.5, 'inferring', e.message)
       } else if (e.status === 'decoding') {

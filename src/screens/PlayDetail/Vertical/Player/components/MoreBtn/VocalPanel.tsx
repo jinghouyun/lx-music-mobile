@@ -22,6 +22,7 @@ const MODES: Array<{ key: VocalMode, label: string }> = [
 
 const busyText: Record<string, string> = {
   downloading: '下载中',
+  queued: '排队等待中',
   decoding: '音频解码中',
   inferring: 'AI 分离中',
 }
@@ -61,6 +62,7 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
   }
 
   const busy = state.task.status === 'downloading' ||
+    state.task.status === 'queued' ||
     state.task.status === 'decoding' ||
     state.task.status === 'inferring'
   const strengthPct = Math.round(sliderVal * 100)
@@ -185,7 +187,9 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
                     />
                   </View>
                   <Text size={12} color={theme['c-font-label']}>
-                    {busyText[state.task.status] ?? '处理中'}… {Math.round(state.task.progress * 100)}%
+                    {state.task.status === 'queued'
+                      ? (state.task.message ?? '排队等待中…')
+                      : `${busyText[state.task.status] ?? '处理中'}… ${Math.round(state.task.progress * 100)}%`}
                     {state.desiredMode !== 'original' ? '（完成后自动切换）' : ''}
                   </Text>
                 </View>

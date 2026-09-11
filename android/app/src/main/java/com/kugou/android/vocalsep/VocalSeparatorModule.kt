@@ -37,7 +37,7 @@ class VocalSeparatorModule(
   init {
     // Service 回调 -> RN 事件（同进程）；任务串行/取消/排队都由 Service 内部队列保证
     VocalSepService.eventListener = { songId, status, fraction, message ->
-      if (status == "inferring" || status == "decoding" ||
+      if (status == "inferring" || status == "decoding" || status == "queued" ||
         status == "done" || status == "error" || status == "cancelled") {
         progress(songId, status, fraction, message)
       }
@@ -67,8 +67,32 @@ class VocalSeparatorModule(
   fun separate(modelPath: String, audioPath: String, songId: String, ep: String?) {
     // 国产 ROM（vivo/小米等）锁屏后会冻结后台：首次分离时引导用户把 App 加入电池优化白名单
     requestIgnoreBatteryOptimizationsOnce()
-    // 委托前台 Service：保活 + 通知进度/取消 + 单 worker 队列（切歌自动取消旧任务）
+    // 委托前台 Service：保活 + 通知进度/取消 + FIFO 队列（切歌不打断当前任务）
     VocalSepService.start(reactContext, modelPath, audioPath, songId, ep ?: "xnnpack")
+  }
+
+  /**
+   * 提前启动前台 Service 保活（不带实际任务）。
+   * JS 侧下载模型（约 165MB）/音频可能耗时数十秒，这期间若没有前台服务，
+   * 锁屏/切后台后国产 ROM 会冻结网络与 JS，导致下载停滞、亮屏后像"重新开始"。
+   * 入队实际任务后保活自动延续；任务取消或 60s 空闲后 Service 自行停止。
+   */
+  @ReactMethod
+  fun warmup() {
+    try {
+      VocalSepService.warmup(reactContext)
+    } catch (_: Throwable) { /* 后台启动受限等，忽略；真正入队时会再试 */ }
+  }
+
+  /**
+   * JS 下载阶段（模型/音频）进度转发到前台通知，使通知栏与面板进度完全一致。
+   * 原生解码/推理开始后 Service 会自行渲染通知并忽略这里的转发。
+   */
+  @ReactMethod
+  fun notifyProgress(stage: String, fraction: Double, message: String?) {
+    try {
+      VocalSepService.postExternalProgress(stage, fraction, message)
+    } catch (_: Throwable) { /* 忽略 */ }
   }
 
   /**

@@ -30,7 +30,7 @@ import type { StemType } from '@/utils/nativeModules/vocalSeparator'
 export type VocalMode = 'original' | 'accompaniment' | 'vocals'
 
 export interface SepTaskState {
-  status: 'idle' | 'downloading' | 'decoding' | 'inferring' | 'done' | 'error'
+  status: 'idle' | 'downloading' | 'queued' | 'decoding' | 'inferring' | 'done' | 'error'
   progress: number
   message?: string
   songId?: string
@@ -103,10 +103,11 @@ const getCurrentSong = async(): Promise<{ id: string, url: string, musicInfo: LX
     if (trackId == null) return null
     const track = await TrackPlayer.getTrack(trackId)
     if (!track || !track.url) return null
-    // 在线临时音源 track.id 形如 `${id}__//随机__//url`，不能直接与 musicInfo.id 比，
-    // Track 上的 musicId 字段才是真实歌曲 id（见 plugins/player/playList.ts buildTracks）。
+    // 在线临时音源 track.id 形如 `${id}__//随机__//url`，每次播放随机数/URL 都不同，
+    // 绝不能用作缓存键（否则同一首歌每次播放都生成新缓存目录，分离结果永远命中不了）。
+    // Track 上的 musicId 字段才是真实稳定的歌曲 id（见 plugins/player/playList.ts buildTracks）。
     const realId = String((track as LX.Player.Track).musicId ?? track.id)
-    return { id: sanitizeId(String(track.id)), url: track.url as string, musicInfo: resolveMusicInfo(realId) }
+    return { id: sanitizeId(realId), url: track.url as string, musicInfo: resolveMusicInfo(realId) }
   } catch {
     return null
   }
@@ -223,6 +224,9 @@ const backToOriginal = async() => {
 
 const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Music.MusicInfo | LX.Download.ListItem | null }) => {
   setTask({ status: 'downloading', progress: 0, songId: song.id, message: '准备中…' })
+  // 任务是否已进入原生 Service 队列：未进入前的失败（模型/音频下载失败）
+  // 需要主动关闭 warmup 保活通知；进入后的失败由 Service 队列自行处理，不能误杀其它歌
+  let enqueued = false
   try {
     // 主动刷新一次播放地址：track.url 是起播时取的临时签名地址，
     // 用户往往在播放一会儿后才打开分离，旧地址可能已过期（网易云返回 410）。
@@ -234,16 +238,20 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       refreshAudioUrl: () => refreshAudioUrl(song.musicInfo, freshUrl),
       ep: 'xnnpack',
       onProgress: (progress, stage, message) => {
+        // 排队事件发生在入队后，标记一下
+        if (stage === 'queued' || stage === 'decoding' || stage === 'inferring') enqueued = true
         setTask({
           status: stage === 'downloading-model' || stage === 'downloading-audio'
             ? 'downloading'
+            : stage === 'queued' ? 'queued'
             : stage === 'decoding' ? 'decoding' : 'inferring',
-          progress,
+          progress: stage === 'queued' ? 0 : progress,
           message,
           songId: song.id,
         })
       },
     })
+    enqueued = true
     setTask({ status: 'done', progress: 1, songId: song.id })
 
     // 完成后若仍停在同一首歌且用户选择了非原唱模式，自动切换
@@ -252,11 +260,14 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       await startMix(state.desiredMode as Exclude<VocalMode, 'original'>)
     }
   } catch (e: any) {
-    // 切歌/切回原唱触发的取消：非异常，不弹提示；任务已属于别的歌则不动它的状态
+    // 切歌/切回原唱触发的取消、或队列超员丢弃：非异常，不弹提示
     if (e instanceof SeparationCancelledError) {
       if (state.task.songId === song.id) setTask({ status: 'idle', progress: 0 })
       return
     }
+    // 下载阶段就失败：Service 只有 warmup 保活、没有实际任务，立即关闭通知，
+    // 否则前台通知会一直挂到 60s 超时
+    if (!enqueued) cancelSeparation()
     if (state.task.songId === song.id) {
       setTask({ status: 'error', progress: 0, songId: song.id, message: e?.message ?? '分离失败' })
     }
@@ -269,9 +280,10 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
   }
 }
 
-/** 是否有针对指定歌曲（或任意歌曲）的分离任务正在进行 */
+/** 是否有针对指定歌曲（或任意歌曲）的分离任务正在进行（含排队等待） */
 const isTaskBusy = (songId?: string) => {
   const busy = state.task.status === 'downloading' ||
+    state.task.status === 'queued' ||
     state.task.status === 'decoding' ||
     state.task.status === 'inferring'
   return busy && (songId == null || state.task.songId === songId)
@@ -397,9 +409,12 @@ export const initVocalSeparation = async() => {
   // 安全兜底：启动时确保主播放器有声
   await TrackPlayer.setVolume(1).catch(() => {})
 
-  // 切歌：旧歌的分离任务立即取消（Service 队列也会自动顶替，双保险避免无效耗电）
+  // 切歌（含播完自动切下一首）：
+  //  - 混音必须停（双轨是上一首歌的），UI 状态重置
+  //  - 但【不取消】旧歌的原生分离任务：让它在后台跑完并落盘缓存，
+  //    新歌进入 Service FIFO 队列等待。这样旧歌分离到一半切走再切回不用重算，
+  //    锁屏后歌曲自动连播也能逐首完成分离。用户主动切回「原唱」才会取消队列。
   TrackPlayer.addEventListener(TPEvent.PlaybackTrackChanged, async() => {
-    if (isTaskBusy()) cancelSeparation()
     stopMix()
     state.activeMode = 'original'
     setTask({ status: 'idle', progress: 0 })
