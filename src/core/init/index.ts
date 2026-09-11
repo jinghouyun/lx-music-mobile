@@ -1,4 +1,4 @@
-import { initSetting, showPactModal } from '@/core/common'
+import { initSetting } from '@/core/common'
 import registerPlaybackService from '@/plugins/player/service'
 import initTheme from './theme'
 import initI18n from './i18n'
@@ -11,23 +11,16 @@ import { initDeeplink } from './deeplink'
 import { initDownloadTasks } from '@/core/download'
 import { setApiSource } from '@/core/apiSource'
 import commonActions from '@/store/common/action'
-import settingState from '@/store/setting/state'
 import { checkUpdate } from '@/core/version'
 import { bootLog } from '@/utils/bootLog'
-import { cheatTip } from '@/utils/tools'
 
 let isFirstPush = true
 const handlePushedHomeScreen = async() => {
-  await cheatTip()
-  if (settingState.setting['common.isAgreePact']) {
-    if (isFirstPush) {
-      isFirstPush = false
-      void checkUpdate()
-      void initDeeplink()
-    }
-  } else {
-    if (isFirstPush) isFirstPush = false
-    showPactModal()
+  // 已移除：启动「谨防被骗」弹窗与「许可协议」签署弹窗，进入首页直接初始化
+  if (isFirstPush) {
+    isFirstPush = false
+    void checkUpdate()
+    void initDeeplink()
   }
 }
 

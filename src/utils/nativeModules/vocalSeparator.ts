@@ -21,6 +21,15 @@ export interface CacheInfo {
   songCount: number
 }
 
+export interface ExportedStem {
+  /** content:// uri 或 file:// uri */
+  uri: string
+  /** 对用户友好的保存位置，如 Music/AppleMusic/歌名 - 伴奏.wav */
+  path: string
+}
+
+export type StemType = 'vocals' | 'accompaniment'
+
 type ProgressListener = (e: VocalSepProgressEvent) => void
 
 const emitter = new NativeEventEmitter(VocalSeparator)
@@ -61,6 +70,16 @@ export const vocalSeparator = {
 
   getCacheInfo(): Promise<CacheInfo> {
     return VocalSeparator.getCacheInfo()
+  },
+
+  /**
+   * 将某一轨保存到手机公共音乐目录（Music/AppleMusic/），系统媒体库可见。
+   * @param songId      分离时使用的歌曲 id
+   * @param stem        'vocals'（人声）或 'accompaniment'（伴奏）
+   * @param displayName 不含扩展名的文件名（会在原生侧再清洗一次）
+   */
+  exportStem(songId: string, stem: StemType, displayName: string): Promise<ExportedStem> {
+    return VocalSeparator.exportStem(songId, stem, displayName)
   },
 
   addProgressListener(listener: ProgressListener) {

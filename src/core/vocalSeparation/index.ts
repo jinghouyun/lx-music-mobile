@@ -8,6 +8,7 @@
  *  - 切歌后模式保持（sticky）：已缓存立即混音；未缓存则播原唱并后台分离，完成自动切换。
  */
 import TrackPlayer, { State as TPState, Event as TPEvent } from 'react-native-track-player'
+import { PermissionsAndroid, Platform } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { toast } from '@/utils/tools'
 import { vocalMixPlayer } from '@/utils/nativeModules/vocalMixPlayer'
@@ -22,7 +23,9 @@ import {
   getStemPaths,
   clearSeparationCache,
   getSeparationCacheInfo,
+  exportStem,
 } from '@/utils/vocalSeparation'
+import type { StemType } from '@/utils/nativeModules/vocalSeparator'
 
 export type VocalMode = 'original' | 'accompaniment' | 'vocals'
 
@@ -317,6 +320,60 @@ export const setVocalStrength = async(value: number) => {
   emit()
   vocalMixPlayer.setStrength(state.strength)
   void AsyncStorage.setItem(STORAGE_STRENGTH, String(state.strength))
+}
+
+/** 当前播放歌曲是否已完成分离（缓存可用） */
+export const isCurrentSongSeparated = async(): Promise<boolean> => {
+  const song = await getCurrentSong()
+  return !!song && await isSongSeparated(song.id)
+}
+
+/** 从歌曲对象（在线/本地/已下载项）取 "歌手 - 歌名" 作为文件名主体 */
+const buildSongFileName = (mi: LX.Music.MusicInfo | LX.Download.ListItem | null): string => {
+  const info: any = mi
+    ? ('musicInfo' in (mi as any) ? (mi as any).musicInfo : mi)
+    : null
+  const name: string = info?.name ?? ''
+  const singer: string = info?.singer ?? ''
+  const base = [singer, name].filter(Boolean).join(' - ').trim()
+  return base || '人声分离'
+}
+
+/**
+ * 把当前歌曲的某一轨（人声/伴奏）保存到手机公共音乐目录。
+ * Android 10+ 走 MediaStore 无需权限；Android 9 及以下需写存储权限。
+ */
+export const saveStem = async(stem: StemType) => {
+  const song = await getCurrentSong()
+  if (!song) {
+    toast('未获取到当前歌曲')
+    return
+  }
+  if (!(await isSongSeparated(song.id))) {
+    toast('请先完成人声分离再保存')
+    return
+  }
+
+  // 旧机型（Android 9 及以下）直写公共目录需要运行时存储权限
+  if (Platform.OS === 'android' && Platform.Version < 29) {
+    const perm = PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
+    if (!(await PermissionsAndroid.check(perm))) {
+      const r = await PermissionsAndroid.request(perm)
+      if (r !== PermissionsAndroid.RESULTS.GRANTED) {
+        toast('需要存储权限才能保存到本地')
+        return
+      }
+    }
+  }
+
+  const suffix = stem === 'vocals' ? '人声' : '伴奏'
+  const displayName = `${buildSongFileName(song.musicInfo)} - ${suffix}`
+  try {
+    const res = await exportStem(song.id, stem, displayName)
+    toast(`已保存：${res.path}`)
+  } catch (e: any) {
+    toast(`保存失败：${e?.message ?? e}`)
+  }
 }
 
 export const getVocalState = (): VocalState => ({

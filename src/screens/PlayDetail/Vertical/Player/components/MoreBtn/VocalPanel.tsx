@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react'
 import { View, TouchableOpacity, StyleSheet } from 'react-native'
 import Modal, { type ModalType } from '@/components/common/Modal'
 import Text from '@/components/common/Text'
@@ -7,7 +7,8 @@ import { useTheme } from '@/store/theme/hook'
 import { createStyle } from '@/utils/tools'
 import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
 import { useVocalState } from '@/core/vocalSeparation/hook'
-import { setVocalMode, setVocalStrength, type VocalMode } from '@/core/vocalSeparation'
+import { setVocalMode, setVocalStrength, saveStem, isCurrentSongSeparated, type VocalMode } from '@/core/vocalSeparation'
+import type { StemType } from '@/utils/nativeModules/vocalSeparator'
 
 export interface VocalPanelType {
   setVisible: (visible: boolean) => void
@@ -30,13 +31,34 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
   const state = useVocalState()
   const modalRef = useRef<ModalType>(null)
   const [sliderVal, setSliderVal] = useState(state.strength)
+  const [separated, setSeparated] = useState(false)
+  const [savingStem, setSavingStem] = useState<StemType | null>(null)
+
+  const refreshSeparated = () => {
+    void isCurrentSongSeparated().then(setSeparated).catch(() => setSeparated(false))
+  }
+
+  // 打开面板 / 分离状态变化 / 切歌时，重新判断当前歌曲是否已可保存
+  useEffect(() => {
+    refreshSeparated()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.task.status, state.task.songId])
 
   useImperativeHandle(ref, () => ({
     setVisible(visible: boolean) {
-      if (visible) setSliderVal(state.strength)
+      if (visible) {
+        setSliderVal(state.strength)
+        refreshSeparated()
+      }
       modalRef.current?.setVisible(visible)
     },
   }))
+
+  const handleSave = (stem: StemType) => {
+    if (savingStem) return
+    setSavingStem(stem)
+    void saveStem(stem).finally(() => setSavingStem(null))
+  }
 
   const busy = state.task.status === 'downloading' ||
     state.task.status === 'decoding' ||
@@ -107,6 +129,39 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
               <Text size={11} color={theme['c-font-label']}>强（纯伴奏）</Text>
             </View>
           </View>
+
+          {/* 保存到本地：分离完成后出现，导出 WAV 到手机音乐目录 */}
+          {separated
+            ? (
+                <View style={styles.saveSection}>
+                  <Text size={13} color={theme['c-font-label']} style={styles.saveTitle}>保存到本地（WAV，存入音乐目录）</Text>
+                  <View style={styles.saveRow}>
+                    {([
+                      { key: 'accompaniment' as StemType, label: '保存伴奏' },
+                      { key: 'vocals' as StemType, label: '保存人声' },
+                    ]).map(b => {
+                      const saving = savingStem === b.key
+                      return (
+                        <TouchableOpacity
+                          key={b.key}
+                          style={StyleSheet.compose(styles.saveBtn, {
+                            backgroundColor: theme['c-button-background'],
+                            borderColor: theme['c-border-background'],
+                            opacity: savingStem && !saving ? 0.5 : 1,
+                          }) as any}
+                          disabled={!!savingStem}
+                          onPress={() => handleSave(b.key)}
+                        >
+                          <Text size={13} color={theme['c-primary-font']}>
+                            {saving ? '保存中…' : b.label}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                </View>
+              )
+            : null}
 
           {/* 混音播放失败原因（常驻，便于定位"没声音"） */}
           {state.mixError
@@ -216,5 +271,24 @@ const styles = createStyle({
   },
   statusLine: {
     marginTop: scaleSizeH(10),
+  },
+  saveSection: {
+    marginTop: scaleSizeH(14),
+  },
+  saveTitle: {
+    marginBottom: scaleSizeH(8),
+  },
+  saveRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  saveBtn: {
+    flex: 1,
+    marginHorizontal: scaleSizeW(4),
+    paddingVertical: scaleSizeH(10),
+    borderRadius: 8,
+    borderWidth: 0.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

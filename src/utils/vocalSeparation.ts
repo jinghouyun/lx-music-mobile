@@ -1,6 +1,6 @@
 import RNFS from 'react-native-fs'
 import { downloadFile, existsFile, mkdirp, unlink } from './fs'
-import { vocalSeparator, type StemPaths } from './nativeModules/vocalSeparator'
+import { vocalSeparator, type StemPaths, type StemType, type ExportedStem } from './nativeModules/vocalSeparator'
 
 /**
  * 人声分离编排层（阶段 2）。
@@ -265,3 +265,12 @@ export const clearSeparationCache = (songId?: string): Promise<number> =>
   vocalSeparator.clearCache(songId ? cacheKeyOf(songId) : undefined)
 
 export const getSeparationCacheInfo = vocalSeparator.getCacheInfo
+
+/**
+ * 把某首歌分离出的一轨保存到手机公共音乐目录（Music/AppleMusic/）。
+ * @param songId      与分离时一致的外部歌曲 id（内部会再哈希成缓存键）
+ * @param stem        'vocals' 人声 | 'accompaniment' 伴奏
+ * @param displayName 不含扩展名的文件名，如 "孤雏 - 伴奏"
+ */
+export const exportStem = (songId: string, stem: StemType, displayName: string): Promise<ExportedStem> =>
+  vocalSeparator.exportStem(cacheKeyOf(songId), stem, displayName)
