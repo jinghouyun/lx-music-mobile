@@ -28,6 +28,11 @@ const modelDir = `${RNFS.DocumentDirectoryPath}/models`
 const modelPath = `${modelDir}/${MODEL_FILE_NAME}`
 const audioCacheDir = `${RNFS.CachesDirectoryPath}/vocal_sep_audio`
 
+const extFromUrl = (url: string): string => {
+  const m = url.split('?')[0].match(/\.(mp3|flac|m4a|aac|ogg|wav)$/i)
+  return m ? m[1].toLowerCase() : 'mp3'
+}
+
 /**
  * 把外部 songId 映射成定长、文件系统安全的缓存键。
  *
@@ -55,8 +60,11 @@ export interface SeparateOptions {
   songId: string
   /** 当前播放音源的可下载 URL（http/https） */
   audioUrl: string
-  /** URL 对应的文件扩展名，如 mp3 / flac / m4a，默认 mp3 */
-  ext?: string
+  /**
+   * URL 失效（如网易云临时签名地址过期返回 410/403）时，用来重新获取一条新鲜地址。
+   * 不传则失败即报错。
+   */
+  refreshAudioUrl?: () => Promise<string>
   /** 进度回调 0~1 */
   onProgress?: (progress: number, stage: 'downloading-model' | 'downloading-audio' | 'decoding' | 'inferring', message?: string) => void
   /** 执行提供者，默认 xnnpack */
@@ -122,28 +130,54 @@ export const ensureModel = async(onProgress?: (fraction: number) => void): Promi
   throw lastError instanceof Error ? lastError : new Error('模型下载失败')
 }
 
-/** 下载音源到本地缓存（已存在则复用） */
-const ensureLocalAudio = async(songId: string, url: string, ext: string, onProgress?: (fraction: number) => void): Promise<string> => {
+/** 下载音源到本地缓存（已存在则复用）。URL 失效时刷新地址重试一次 */
+const ensureLocalAudio = async(
+  cacheId: string,
+  initialUrl: string,
+  refreshUrl: (() => Promise<string>) | undefined,
+  onProgress?: (fraction: number) => void,
+): Promise<string> => {
   await mkdirp(audioCacheDir)
-  const target = `${audioCacheDir}/${songId}.${ext}`
-  if (await existsFile(target)) return target
+  let url = initialUrl
 
-  const tmp = `${target}.download`
-  await new Promise<void>((resolve, reject) => {
-    const job = downloadFile(url, tmp, {
-      progressInterval: 500,
-      begin: () => {},
-      progress: (res) => {
-        if (res.contentLength > 0) onProgress?.(res.bytesWritten / res.contentLength)
-      },
-    })
-    job.promise.then((r) => {
-      if (r.statusCode >= 200 && r.statusCode < 300) resolve()
-      else reject(new Error(`音频下载 HTTP ${r.statusCode}`))
-    }).catch(reject)
-  })
-  await RNFS.moveFile(tmp, target)
-  return target
+  // 最多两轮：第一轮用传入地址；若失败（典型：网易云临时签名过期 → 410/403），
+  // 通过 refreshUrl 重新取一条新鲜地址再试，避免"原唱还在放、分离却下载失败"。
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ext = extFromUrl(url)
+    const target = `${audioCacheDir}/${cacheId}.${ext}`
+    if (await existsFile(target)) return target
+
+    const tmp = `${target}.download`
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const job = downloadFile(url, tmp, {
+          progressInterval: 500,
+          begin: () => {},
+          progress: (res) => {
+            if (res.contentLength > 0) onProgress?.(res.bytesWritten / res.contentLength)
+          },
+        })
+        job.promise.then((r) => {
+          if (r.statusCode >= 200 && r.statusCode < 300) resolve()
+          else reject(new Error(`音频下载 HTTP ${r.statusCode}`))
+        }).catch(reject)
+      })
+      await RNFS.moveFile(tmp, target)
+      return target
+    } catch (e) {
+      try { await unlink(tmp) } catch { /* 忽略 */ }
+      // 仅第一轮、且提供了刷新函数时才重试
+      if (attempt !== 0 || !refreshUrl) throw e
+      try {
+        const fresh = await refreshUrl()
+        if (fresh) url = fresh
+        else throw e
+      } catch {
+        throw e // 刷新也失败：抛出原始下载错误
+      }
+    }
+  }
+  throw new Error('音频下载失败')
 }
 
 /**
@@ -151,7 +185,7 @@ const ensureLocalAudio = async(songId: string, url: string, ext: string, onProgr
  * 已缓存则直接返回路径；否则 下载模型/音频 -> 原生分离 -> 返回双轨 WAV 路径。
  */
 export const separateSong = async(options: SeparateOptions): Promise<SeparateResult> => {
-  const { songId, audioUrl, ext = 'mp3', onProgress, ep = 'xnnpack' } = options
+  const { songId, audioUrl, refreshAudioUrl, onProgress, ep = 'xnnpack' } = options
   // 文件系统/原生缓存一律用定长哈希键（原始 songId 可能超长，见 cacheKeyOf）
   const cacheId = cacheKeyOf(songId)
 
@@ -163,9 +197,9 @@ export const separateSong = async(options: SeparateOptions): Promise<SeparateRes
   onProgress?.(0, 'downloading-model')
   const mPath = await ensureModel((f) => onProgress?.(f * 0.3, 'downloading-model', '正在下载人声分离模型…'))
 
-  // 3. 音频
+  // 3. 音频（URL 可能已过期，下载器内部会在失败时用 refreshAudioUrl 刷新重试）
   onProgress?.(0.3, 'downloading-audio')
-  const audioPath = await ensureLocalAudio(cacheId, audioUrl, ext, (f) =>
+  const audioPath = await ensureLocalAudio(cacheId, audioUrl, refreshAudioUrl, (f) =>
     onProgress?.(0.3 + f * 0.1, 'downloading-audio', '正在获取音频…'))
 
   // 4. 原生分离（事件转 Promise）
