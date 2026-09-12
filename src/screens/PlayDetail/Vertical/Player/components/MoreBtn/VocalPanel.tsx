@@ -61,10 +61,15 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
     void saveStem(stem).finally(() => setSavingStem(null))
   }
 
-  const busy = state.task.status === 'downloading' ||
+  const taskBusy = state.task.status === 'downloading' ||
     state.task.status === 'queued' ||
     state.task.status === 'decoding' ||
     state.task.status === 'inferring'
+  // 只有"当前歌曲尚未分离、正在为它分离"时才显示进度条。
+  // 当前歌曲已缓存（separated）或已在混音播放（activeMode 非原唱）时，即便后台有
+  // 其它歌曲正在分离，也与当前歌曲无关，不显示"AI 分离中…"，避免回到一首已缓存的歌
+  // 点纯人声时底部又像重新分离了一遍。
+  const busy = taskBusy && !separated && state.activeMode === 'original'
   const strengthPct = Math.round(sliderVal * 100)
 
   return (

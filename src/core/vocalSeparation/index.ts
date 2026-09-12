@@ -73,6 +73,15 @@ export const addVocalStateListener = (cb: Listener) => {
 let syncTimer: ReturnType<typeof setInterval> | null = null
 let inited = false
 
+/**
+ * 当前正在播放歌曲的稳定缓存 id（每次 getCurrentSong 解析时刷新）。
+ * 用途：把"分离进度/失败"这类 UI 状态严格限定在【当前歌曲】上。
+ * 切歌后上一首会在原生后台继续分离并落盘缓存（设计如此，避免重复计算），
+ * 但它的进度事件不应再回灌到当前歌曲的面板——否则回到一首"已缓存、正在听
+ * 纯人声"的歌时，底部仍会被后台其它歌曲的进度刷成"AI 分离中…"，像又分离了一遍。
+ */
+let currentSongId: string | null = null
+
 const sanitizeId = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_')
 
 /**
@@ -107,7 +116,10 @@ const getCurrentSong = async(): Promise<{ id: string, url: string, musicInfo: LX
     // 绝不能用作缓存键（否则同一首歌每次播放都生成新缓存目录，分离结果永远命中不了）。
     // Track 上的 musicId 字段才是真实稳定的歌曲 id（见 plugins/player/playList.ts buildTracks）。
     const realId = String((track as LX.Player.Track).musicId ?? track.id)
-    return { id: sanitizeId(realId), url: track.url as string, musicInfo: resolveMusicInfo(realId) }
+    const id = sanitizeId(realId)
+    // 刷新"当前歌曲"标记，供分离任务的进度回调判断是否该更新 UI
+    currentSongId = id
+    return { id, url: track.url as string, musicInfo: resolveMusicInfo(realId) }
   } catch {
     return null
   }
@@ -223,7 +235,12 @@ const backToOriginal = async() => {
 // ---------------- 分离任务 ----------------
 
 const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Music.MusicInfo | LX.Download.ListItem | null }) => {
-  setTask({ status: 'downloading', progress: 0, songId: song.id, message: '准备中…' })
+  // 该任务是否仍属于"当前正在播放的歌"。切歌后旧任务转为后台任务（原生继续跑完落盘），
+  // 此时它的进度/完成/失败都不应再动当前歌曲的面板 UI。
+  const isForCurrent = () => currentSongId === song.id
+  if (isForCurrent()) {
+    setTask({ status: 'downloading', progress: 0, songId: song.id, message: '准备中…' })
+  }
   // 任务是否已进入原生 Service 队列：未进入前的失败（模型/音频下载失败）
   // 需要主动关闭 warmup 保活通知；进入后的失败由 Service 队列自行处理，不能误杀其它歌
   let enqueued = false
@@ -238,8 +255,10 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       refreshAudioUrl: () => refreshAudioUrl(song.musicInfo, freshUrl),
       ep: 'xnnpack',
       onProgress: (progress, stage, message) => {
-        // 排队事件发生在入队后，标记一下
+        // 排队事件发生在入队后，标记一下（原生生命周期，与是否当前歌曲无关）
         if (stage === 'queued' || stage === 'decoding' || stage === 'inferring') enqueued = true
+        // 仅当前歌曲的进度才回灌面板；后台其它歌曲静默分离、落盘缓存即可
+        if (!isForCurrent()) return
         setTask({
           status: stage === 'downloading-model' || stage === 'downloading-audio'
             ? 'downloading'
@@ -252,7 +271,9 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       },
     })
     enqueued = true
-    setTask({ status: 'done', progress: 1, songId: song.id })
+    if (isForCurrent()) {
+      setTask({ status: 'done', progress: 1, songId: song.id })
+    }
 
     // 完成后若仍停在同一首歌且用户选择了非原唱模式，自动切换
     const now = await getCurrentSong()
@@ -271,12 +292,16 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
     if (state.task.songId === song.id) {
       setTask({ status: 'error', progress: 0, songId: song.id, message: e?.message ?? '分离失败' })
     }
-    // 失败回退原唱
-    if (state.activeMode === 'original') {
-      state.desiredMode = 'original'
-      emit()
+    // 仅当前歌曲失败才回退模式并提示；后台歌曲失败保持静默（切到该歌时会自动重试），
+    // 避免用户正听着已缓存歌曲时被无关的后台失败打断或重置模式。
+    if (isForCurrent()) {
+      // 失败回退原唱
+      if (state.activeMode === 'original') {
+        state.desiredMode = 'original'
+        emit()
+      }
+      toast(`人声分离失败：${e?.message ?? '未知错误'}`)
     }
-    toast(`人声分离失败：${e?.message ?? '未知错误'}`)
   }
 }
 
@@ -426,7 +451,9 @@ export const initVocalSeparation = async() => {
         setTimeout(() => { void startMix(state.desiredMode as Exclude<VocalMode, 'original'>) }, 1200)
       } else {
         await TrackPlayer.setVolume(1).catch(() => {})
-        void startSeparation(song)
+        // 同一首未缓存歌曲已在分离中则不重复发起（原生侧对同 songId 进行中/排队任务
+        // 也会去重，双保险，避免切走又切回时重复计算）。
+        if (!isTaskBusy(song.id)) void startSeparation(song)
       }
     } else {
       await TrackPlayer.setVolume(1).catch(() => {})
