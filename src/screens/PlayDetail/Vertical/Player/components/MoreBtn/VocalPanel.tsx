@@ -58,7 +58,8 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
   const handleSave = (stem: StemType) => {
     if (savingStem) return
     setSavingStem(stem)
-    void saveStem(stem).finally(() => setSavingStem(null))
+    // saveStem 内部已 toast 兜底；这里再吞掉游离 reject，避免任何边角异常冒到全局致命页
+    void saveStem(stem).catch(() => {}).finally(() => setSavingStem(null))
   }
 
   const taskBusy = state.task.status === 'downloading' ||
@@ -104,7 +105,7 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
                       : theme['c-button-background'],
                     borderColor: selected ? theme['c-primary'] : theme['c-border-background'],
                   }) as any}
-                  onPress={() => { void setVocalMode(m.key) }}
+                  onPress={() => { void setVocalMode(m.key).catch(() => {}) }}
                 >
                   <Text
                     size={14}
@@ -129,7 +130,7 @@ export default forwardRef<VocalPanelType, {}>((_, ref) => {
               maximumValue={1}
               step={0.01}
               onValueChange={setSliderVal}
-              onSlidingComplete={(v) => { void setVocalStrength(v) }}
+              onSlidingComplete={(v) => { void setVocalStrength(v).catch(() => {}) }}
             />
             <View style={styles.sliderEnds}>
               <Text size={11} color={theme['c-font-label']}>弱（保留人声）</Text>

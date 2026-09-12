@@ -199,7 +199,19 @@ const startMix = async(mode: Exclude<VocalMode, 'original'>) => {
     emit()
     return
   }
-  const paths = await getStemPaths(song.id)
+  // getStemPaths 是原生 Promise，极端情况下（桥接/IO 异常）会 reject；
+  // 必须本地兜住，否则会作为游离 reject 冒到全局致命错误页（弹 Critical Error 但不影响播放）。
+  let paths: Awaited<ReturnType<typeof getStemPaths>> = null
+  try {
+    paths = await getStemPaths(song.id)
+  } catch (e: any) {
+    stopMix()
+    await TrackPlayer.setVolume(1).catch(() => {})
+    state.activeMode = 'original'
+    state.mixError = `读取分离结果失败：${e?.message ?? e}`
+    emit()
+    return
+  }
   if (!paths) {
     state.mixError = '找不到分离结果文件（可能已被清理），请重新分离'
     emit()
@@ -323,33 +335,43 @@ export const setVocalMode = async(mode: VocalMode) => {
   state.desiredMode = mode
   state.mixError = null
   emit()
-
-  if (mode === 'original') {
-    // 切回原唱：进行中的分离任务没有继续的必要，取消省电（Service 会清理临时文件）
-    if (isTaskBusy()) cancelSeparation()
-    await backToOriginal()
-    return
-  }
-
-  // 已在混音中：伴奏/人声之间直接切，无需重启
-  if (state.activeMode !== 'original') {
-    vocalMixPlayer.setMode(mode === 'vocals' ? 2 : 1)
-    state.activeMode = mode
-    emit()
-    return
-  }
-
-  const song = await getCurrentSong()
-  if (!song) return
-
-  if (await isSongSeparated(song.id)) {
-    await startMix(mode)
-  } else {
-    // 未分离：原唱继续放，后台分离，完成自动切
-    if (!isTaskBusy(song.id)) {
-      void startSeparation(song)
+  try {
+    if (mode === 'original') {
+      // 切回原唱：进行中的分离任务没有继续的必要，取消省电（Service 会清理临时文件）
+      if (isTaskBusy()) cancelSeparation()
+      await backToOriginal()
+      return
     }
-    toast('人声分离中，完成后自动切换')
+
+    // 已在混音中：伴奏/人声之间直接切，无需重启
+    if (state.activeMode !== 'original') {
+      vocalMixPlayer.setMode(mode === 'vocals' ? 2 : 1)
+      state.activeMode = mode
+      emit()
+      return
+    }
+
+    const song = await getCurrentSong()
+    if (!song) return
+
+    if (await isSongSeparated(song.id)) {
+      await startMix(mode)
+    } else {
+      // 未分离：原唱继续放，后台分离，完成自动切
+      if (!isTaskBusy(song.id)) {
+        void startSeparation(song)
+      }
+      toast('人声分离中，完成后自动切换')
+    }
+  } catch (e: any) {
+    // 本地兜底：切模式是用户即时操作，任何异常都不应作为游离 reject 冒到全局致命页；
+    // 失败时安全回退原唱并提示，原生播放不中断（这正是“弹错但不影响使用”的根源）。
+    stopMix()
+    await TrackPlayer.setVolume(1).catch(() => {})
+    state.activeMode = 'original'
+    state.desiredMode = 'original'
+    emit()
+    toast(`切换人声模式失败，已恢复原唱：${e?.message ?? e}`)
   }
 }
 
@@ -357,14 +379,20 @@ export const setVocalMode = async(mode: VocalMode) => {
 export const setVocalStrength = async(value: number) => {
   state.strength = Math.min(1, Math.max(0, value))
   emit()
-  vocalMixPlayer.setStrength(state.strength)
-  void AsyncStorage.setItem(STORAGE_STRENGTH, String(state.strength))
+  try {
+    vocalMixPlayer.setStrength(state.strength)
+  } catch { /* 混音尚未启动时调强度：原生调用可能抛错，忽略即可 */ }
+  void AsyncStorage.setItem(STORAGE_STRENGTH, String(state.strength)).catch(() => {})
 }
 
-/** 当前播放歌曲是否已完成分离（缓存可用） */
+/** 当前播放歌曲是否已完成分离（缓存可用）；任何异常都按“未分离”处理，绝不向上抛 */
 export const isCurrentSongSeparated = async(): Promise<boolean> => {
-  const song = await getCurrentSong()
-  return !!song && await isSongSeparated(song.id)
+  try {
+    const song = await getCurrentSong()
+    return !!song && await isSongSeparated(song.id)
+  } catch {
+    return false
+  }
 }
 
 /** 从歌曲对象（在线/本地/已下载项）取 "歌手 - 歌名" 作为文件名主体 */
@@ -383,31 +411,32 @@ const buildSongFileName = (mi: LX.Music.MusicInfo | LX.Download.ListItem | null)
  * Android 10+ 走 MediaStore 无需权限；Android 9 及以下需写存储权限。
  */
 export const saveStem = async(stem: StemType) => {
-  const song = await getCurrentSong()
-  if (!song) {
-    toast('未获取到当前歌曲')
-    return
-  }
-  if (!(await isSongSeparated(song.id))) {
-    toast('请先完成人声分离再保存')
-    return
-  }
+  // 整体兜底：权限请求/缓存查询/导出任一步 reject 都只 toast，不冒到全局致命页
+  try {
+    const song = await getCurrentSong()
+    if (!song) {
+      toast('未获取到当前歌曲')
+      return
+    }
+    if (!(await isSongSeparated(song.id))) {
+      toast('请先完成人声分离再保存')
+      return
+    }
 
-  // 旧机型（Android 9 及以下）直写公共目录需要运行时存储权限
-  if (Platform.OS === 'android' && Platform.Version < 29) {
-    const perm = PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
-    if (!(await PermissionsAndroid.check(perm))) {
-      const r = await PermissionsAndroid.request(perm)
-      if (r !== PermissionsAndroid.RESULTS.GRANTED) {
-        toast('需要存储权限才能保存到本地')
-        return
+    // 旧机型（Android 9 及以下）直写公共目录需要运行时存储权限
+    if (Platform.OS === 'android' && Platform.Version < 29) {
+      const perm = PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
+      if (!(await PermissionsAndroid.check(perm))) {
+        const r = await PermissionsAndroid.request(perm)
+        if (r !== PermissionsAndroid.RESULTS.GRANTED) {
+          toast('需要存储权限才能保存到本地')
+          return
+        }
       }
     }
-  }
 
-  const suffix = stem === 'vocals' ? '人声' : '伴奏'
-  const displayName = `${buildSongFileName(song.musicInfo)} - ${suffix}`
-  try {
+    const suffix = stem === 'vocals' ? '人声' : '伴奏'
+    const displayName = `${buildSongFileName(song.musicInfo)} - ${suffix}`
     const res = await exportStem(song.id, stem, displayName)
     toast(`已保存：${res.path}`)
   } catch (e: any) {
@@ -446,18 +475,25 @@ export const initVocalSeparation = async() => {
     state.activeMode = 'original'
     setTask({ status: 'idle', progress: 0 })
 
-    const song = await getCurrentSong()
-    if (state.desiredMode !== 'original' && song) {
-      if (await isSongSeparated(song.id)) {
-        // 等 TrackPlayer 起播后再跟（缓冲期间 syncTo 会自动等待）
-        setTimeout(() => { void startMix(state.desiredMode as Exclude<VocalMode, 'original'>) }, 1200)
+    // 切歌是高频事件，回调里的原生 Promise（isSongSeparated 等）若 reject，
+    // 会作为未捕获异常弹全局致命页（但播放仍在继续，表现为“弹错却不影响使用”）。
+    // 整体本地兜住：任何异常都只保证主播放器有声，绝不向上抛。
+    try {
+      const song = await getCurrentSong()
+      if (state.desiredMode !== 'original' && song) {
+        if (await isSongSeparated(song.id)) {
+          // 等 TrackPlayer 起播后再跟（缓冲期间 syncTo 会自动等待）
+          setTimeout(() => { void startMix(state.desiredMode as Exclude<VocalMode, 'original'>) }, 1200)
+        } else {
+          await TrackPlayer.setVolume(1).catch(() => {})
+          // 同一首未缓存歌曲已在分离中则不重复发起（原生侧对同 songId 进行中/排队任务
+          // 也会去重，双保险，避免切走又切回时重复计算）。
+          if (!isTaskBusy(song.id)) void startSeparation(song)
+        }
       } else {
         await TrackPlayer.setVolume(1).catch(() => {})
-        // 同一首未缓存歌曲已在分离中则不重复发起（原生侧对同 songId 进行中/排队任务
-        // 也会去重，双保险，避免切走又切回时重复计算）。
-        if (!isTaskBusy(song.id)) void startSeparation(song)
       }
-    } else {
+    } catch {
       await TrackPlayer.setVolume(1).catch(() => {})
     }
   })
@@ -477,10 +513,10 @@ export const initVocalSeparation = async() => {
 
   // 混音异常：回退原唱
   vocalMixPlayer.addErrorListener((e) => {
-    void backToOriginal()
+    void backToOriginal().catch(() => {})
     state.desiredMode = 'original'
     emit()
-    toast(`人声播放异常，已恢复原唱：${e.message}`)
+    toast(`人声播放异常，已恢复原唱：${e?.message ?? e}`)
   })
 }
 

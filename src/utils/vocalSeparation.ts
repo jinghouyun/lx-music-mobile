@@ -245,6 +245,9 @@ export const separateSong = async(options: SeparateOptions): Promise<SeparateRes
         vocalSeparator.getStemPaths(cacheId).then((paths) => {
           if (paths) resolve({ songId, ...paths })
           else reject(new Error('分离完成但找不到输出文件'))
+        }).catch((err) => {
+          // 原生事件回调里绝不能留游离 reject，否则会冒到全局致命错误页
+          reject(err instanceof Error ? err : new Error(String(err)))
         })
       } else if (e.status === 'cancelled') {
         if (settled) return
