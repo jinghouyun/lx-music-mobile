@@ -1,6 +1,13 @@
 import RNFS from 'react-native-fs'
 import { downloadFile, existsFile, mkdirp, unlink } from './fs'
-import { vocalSeparator, type StemPaths, type StemType, type ExportedStem } from './nativeModules/vocalSeparator'
+import {
+  vocalSeparator,
+  type StemPaths,
+  type StemType,
+  type ExportedStem,
+  type CacheExportResult,
+  type CacheImportResult,
+} from './nativeModules/vocalSeparator'
 
 /**
  * 人声分离编排层（阶段 2）。
@@ -293,3 +300,18 @@ export const getSeparationCacheInfo = vocalSeparator.getCacheInfo
  */
 export const exportStem = (songId: string, stem: StemType, displayName: string): Promise<ExportedStem> =>
   vocalSeparator.exportStem(cacheKeyOf(songId), stem, displayName)
+
+/**
+ * 导出整个人声分离缓存为 zip 包到指定目录（设置页用，不做歌曲 id 哈希转换）。
+ * @param targetDirPath 目标目录绝对路径
+ * @param fileName      不含 .zip 后缀的文件名
+ */
+export const exportSeparationCache = (targetDirPath: string, fileName: string): Promise<CacheExportResult> =>
+  vocalSeparator.exportCache(targetDirPath, fileName)
+
+/**
+ * 从 zip 包导入整个人声分离缓存（已存在的歌曲跳过不覆盖，设置页用）。
+ * @param zipFilePath zip 文件绝对路径
+ */
+export const importSeparationCache = (zipFilePath: string): Promise<CacheImportResult> =>
+  vocalSeparator.importCache(zipFilePath)
