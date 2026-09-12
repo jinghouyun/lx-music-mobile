@@ -166,6 +166,22 @@ class VocalSepService : Service() {
   }
 
   /**
+   * 轻量“分离历史”，追加写到 vocalsep/.history，供设置页“缓存目录体检”读取：
+   * 判断分离结果到底有没有落盘、是否后来被版本清理/取消/报错清掉，
+   * 排查“明明分离成功，缓存却统计为 0”。文件过大时自动截断重建。
+   */
+  private fun appendHistory(line: String) {
+    try {
+      val root = File(filesDir, "vocalsep")
+      root.mkdirs()
+      val f = File(root, ".history")
+      val ts = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+      val text = "$ts $line\n"
+      if (f.exists() && f.length() > 80_000) f.writeText(text) else f.appendText(text)
+    } catch (_: Throwable) { /* 历史记录失败不影响分离 */ }
+  }
+
+  /**
    * 持有 PARTIAL_WAKE_LOCK：锁屏/灭屏后阻止 CPU 进入 Doze 深度休眠，
    * 保证后台推理线程持续跑（否则灭屏后 CPU 降频/挂起，分离会被拖慢甚至冻结，
    * 亮屏回来看起来像"重新开始"）。带 1 小时超时兜底，防止异常路径永久持锁。
@@ -357,10 +373,12 @@ class VocalSepService : Service() {
         sepRoot.listFiles()?.forEach { it.deleteRecursively() }
         sepRoot.mkdirs()
         verFile.writeText(CACHE_VERSION)
+        appendHistory("wipe: 版本校验不匹配，清空 vocalsep 后重建为 $CACHE_VERSION")
       }
       val v = File(outDir, "vocals.wav")
       val a = File(outDir, "accompaniment.wav")
       if (v.exists() && a.exists()) {
+        appendHistory("hit ${job.songId}: 双轨已存在，直接命中缓存 (v=${v.length()}, a=${a.length()})")
         renderNotification(100, "已完成", false)
         emit(job.songId, "done", 1.0, "已缓存")
         return
@@ -415,15 +433,19 @@ class VocalSepService : Service() {
 
       if (job.cancelled.get()) {
         // 推理刚好在取消标志到达时完成：输出文件已落盘，按取消处理，由下次请求重新判定缓存
+        appendHistory("cancel ${job.songId}: 推理完成但收到取消")
         emit(job.songId, "cancelled", 0.0, "已取消")
       } else {
+        appendHistory("done ${job.songId}: 双轨已落盘 (v=${v.length()}, a=${a.length()}) -> ${outDir.absolutePath}")
         renderNotification(100, "分离完成", false)
         emit(job.songId, "done", 1.0, "分离完成")
       }
     } catch (t: Throwable) {
       if (t is SeparationCancelledException || job.cancelled.get()) {
+        appendHistory("cancel ${job.songId}: ${t.javaClass.simpleName}")
         emit(job.songId, "cancelled", 0.0, "已取消")
       } else {
+        appendHistory("error ${job.songId}: ${t.message ?: t.javaClass.simpleName}")
         emit(job.songId, "error", 0.0, t.message ?: t.javaClass.simpleName)
       }
     } finally {

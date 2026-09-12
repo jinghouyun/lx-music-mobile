@@ -19,6 +19,22 @@ export interface StemPaths {
 export interface CacheInfo {
   sizeBytes: number
   songCount: number
+  /** —— 以下为“缓存目录体检”诊断字段（getCacheInfo 原生回传，排查统计为 0 用）—— */
+  rootPath?: string
+  rootExists?: boolean
+  rootIsDir?: boolean
+  filesDir?: string
+  cacheDir?: string
+  /** vocalsep 根下每个子项：`name|dir/file|V=1/0 A=1/0|字节数` */
+  rootEntries?: string[]
+  /** cacheDir/vocalsep_work 残留子项（正常应为空） */
+  workEntries?: string[]
+  /** filesDir 一级子项（确认 vocalsep 是否建在别处） */
+  filesDirEntries?: string[]
+  /** 原生分离历史（Service 写入 vocalsep/.history 的末尾片段） */
+  history?: string
+  /** 原生统计自身抛错时回传（用 resolve 而非 reject，避免被 JS catch 吞成 0） */
+  diagError?: string
 }
 
 export interface ExportedStem {

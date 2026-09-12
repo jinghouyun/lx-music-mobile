@@ -166,25 +166,62 @@ class VocalSeparatorModule(
 
   @ReactMethod
   fun getCacheInfo(promise: Promise) {
-    val root = cacheRoot()
-    var size = 0L
-    var count = 0
-    if (root.exists()) {
-      root.listFiles()?.forEach { d ->
-        // 与分离完成判定(isCached)/导出口径一致：双轨齐全才算一首已分离，
-        // 半成品目录（仅一轨、.tmp、_import_tmp_、.cachever 文件）不计入。
-        val hasVocals = File(d, "vocals.wav").exists()
-        val hasAcc = File(d, "accompaniment.wav").exists()
-        if (d.isDirectory && hasVocals && hasAcc) {
-          count++
-          size += dirSize(d)
+    val m = Arguments.createMap()
+    try {
+      val root = cacheRoot()
+      var size = 0L
+      var count = 0
+      // 体检信息：逐个列出 vocalsep 下的子项，定位“明明分离成功却统计为 0”
+      val entries = Arguments.createArray()
+      if (root.exists()) {
+        root.listFiles()?.forEach { d ->
+          val hasVocals = File(d, "vocals.wav").exists()
+          val hasAcc = File(d, "accompaniment.wav").exists()
+          val dSize = if (d.isDirectory) dirSize(d) else d.length()
+          entries.pushString(
+            "${d.name}|${if (d.isDirectory) "dir" else "file"}|V=${if (hasVocals) 1 else 0} A=${if (hasAcc) 1 else 0}|$dSize",
+          )
+          // 与 isCached/导出口径一致：双轨齐全且为目录才算一首已分离
+          if (d.isDirectory && hasVocals && hasAcc) {
+            count++
+            size += dSize
+          }
         }
       }
+      m.putDouble("sizeBytes", size.toDouble())
+      m.putInt("songCount", count)
+      m.putString("rootPath", root.absolutePath)
+      m.putBoolean("rootExists", root.exists())
+      m.putBoolean("rootIsDir", root.isDirectory)
+      m.putString("filesDir", reactContext.filesDir.absolutePath)
+      m.putString("cacheDir", reactContext.cacheDir.absolutePath)
+      m.putArray("rootEntries", entries)
+
+      // work 目录（cacheDir/vocalsep_work）正常应在分离结束后被删；若残留 wav 说明输出没落到位
+      val workEntries = Arguments.createArray()
+      File(reactContext.cacheDir, "vocalsep_work").takeIf { it.exists() }
+        ?.listFiles()?.forEach { w -> workEntries.pushString(w.name) }
+      m.putArray("workEntries", workEntries)
+
+      // filesDir 一级子项：排查 vocalsep 是否被建到别处/命名异常
+      val fdEntries = Arguments.createArray()
+      reactContext.filesDir.listFiles()?.forEach { f ->
+        fdEntries.pushString(f.name + if (f.isDirectory) "/" else "")
+      }
+      m.putArray("filesDirEntries", fdEntries)
+
+      // 分离历史（Service 追加写入 vocalsep/.history），只取末尾 4KB
+      File(root, ".history").takeIf { it.exists() }?.let {
+        m.putString("history", it.readText().takeLast(4000))
+      }
+      promise.resolve(m)
+    } catch (e: Throwable) {
+      // 关键：用 resolve 回传异常，避免 JS 端 .catch 把真实错误吞成“0 首/0B”
+      m.putDouble("sizeBytes", 0.0)
+      m.putInt("songCount", 0)
+      m.putString("diagError", e.toString())
+      promise.resolve(m)
     }
-    val m = Arguments.createMap()
-    m.putDouble("sizeBytes", size.toDouble())
-    m.putInt("songCount", count)
-    promise.resolve(m)
   }
 
   private fun dirSize(d: File): Long {
