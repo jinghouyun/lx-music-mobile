@@ -171,7 +171,11 @@ class VocalSeparatorModule(
     var count = 0
     if (root.exists()) {
       root.listFiles()?.forEach { d ->
-        if (File(d, "vocals.wav").exists()) {
+        // 与分离完成判定(isCached)/导出口径一致：双轨齐全才算一首已分离，
+        // 半成品目录（仅一轨、.tmp、_import_tmp_、.cachever 文件）不计入。
+        val hasVocals = File(d, "vocals.wav").exists()
+        val hasAcc = File(d, "accompaniment.wav").exists()
+        if (d.isDirectory && hasVocals && hasAcc) {
           count++
           size += dirSize(d)
         }

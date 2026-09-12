@@ -62,7 +62,10 @@ export default memo(() => {
     choosePathRef.current?.show({
       title: '选择缓存备份文件（.zip）',
       dirOnly: false,
-      filter: /\.zip$/i,
+      // ChoosePath 的 filter 约定为“不带点的扩展名数组”（同 PicItem / LXM_FILE_EXT_RXP），
+      // 不能传正则：系统选择器会把它作为 extTypes 传给原生（RegExp 无法跨桥序列化，直接崩溃），
+      // 内置选择器也会对它调用 .join() 报错。
+      filter: ['zip'],
     })
   }
 
@@ -90,8 +93,14 @@ export default memo(() => {
     }
   }
 
+  // 设置页是虚拟长列表：本组件滚入可视区才挂载、滚远会卸载。挂载即统计一次，
+  // 并在存活期间每 2s 刷新，保证“先开过设置、再去分离歌曲、回到本页”时不会停留在
+  // 旧的“已分离 0 首 / 0B”。扫描目录极小，开销可忽略；卸载即清理定时器。
   useEffect(() => {
     refresh()
+    const timer = setInterval(() => { refresh() }, 2000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const busy = exporting || importing || cleaning
