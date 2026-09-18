@@ -118,12 +118,11 @@ class DemucsSeparator(
       android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
     } catch (_: Throwable) {}
 
-    // 回退顺序（关键）：XNNPACK 失败后直接回纯 CPU，不再走 NNAPI。
-    // 原因：htdemucs 含大量 LSTM/Transformer/动态形状算子，NNAPI 大多不支持、回退 CPU，
-    // 还倒贴 NNAPI<->CPU 的张量拷贝与分区开销，实测比纯 CPU 更慢。
-    // NNAPI 仅在用户显式指定时才尝试。
+    // 回退顺序：优先 NNAPI（NPU 硬件加速），失败/静音后回 XNNPACK，再回 CPU。
+    // NNAPI 在骁龙 8 Gen 2/3 的 Hexagon NPU 上 Conv 类算子可大幅加速；
+    // 不支持的 LSTM/Transformer 算子自动回退 CPU，不会崩溃。
     val order = when (ep) {
-      "nnapi" -> listOf("nnapi", "cpu")
+      "nnapi" -> listOf("nnapi", "xnnpack", "cpu")
       "xnnpack" -> listOf("xnnpack", "cpu")
       else -> listOf("cpu")
     }
@@ -195,16 +194,20 @@ class DemucsSeparator(
           tmpAcc.renameTo(accWav)
           return Pair(vocalsWav, accWav)
         } catch (fb: CpuFallback) {
-          // 首块自检发现当前后端输出全 0（真机上 XNNPACK 对该 FP16 图的已知数值异常）：
-          // 丢弃本遍半成品，关闭会话，用纯 CPU 后端重建后从头重跑。
+          // 首块自检发现当前后端输出全 0：按回退链降级（nnapi→xnnpack→cpu）重跑
           try { wavV.close() } catch (_: Exception) {}
           try { wavA.close() } catch (_: Exception) {}
           tmpVocals.delete()
           tmpAcc.delete()
+          val nextEp = when (ep) {
+            "nnapi" -> "xnnpack"
+            "xnnpack" -> "cpu"
+            else -> "cpu"
+          }
           Log.w(TAG, "后端 ${fb.backend} 首块输出静音" +
-            "(inPeak=${fb.inPeak},outPeak=${fb.outPeak},nan=${fb.nan})，降级纯 CPU 重跑")
+            "(inPeak=${fb.inPeak},outPeak=${fb.outPeak},nan=${fb.nan})，降级 $nextEp 重跑")
           try { close() } catch (_: Exception) {}
-          ep = "cpu"
+          ep = nextEp
           open()
           onProgress(0.0, "inferring")
         } catch (t: Throwable) {

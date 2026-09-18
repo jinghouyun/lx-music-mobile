@@ -267,7 +267,7 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       audioUrl: freshUrl,
       // 下载仍失败（410/403）时，下载器会再调一次这里取新地址重试
       refreshAudioUrl: () => refreshAudioUrl(song.musicInfo, freshUrl),
-      ep: 'xnnpack',
+      ep: 'nnapi',
       onProgress: (progress, stage, message) => {
         // 排队事件发生在入队后，标记一下（原生生命周期，与是否当前歌曲无关）
         if (stage === 'queued' || stage === 'decoding' || stage === 'inferring') enqueued = true
