@@ -411,8 +411,8 @@ class VocalSepService : Service() {
         if (job.cancelled.get()) engine?.cancelled = true
         val pct = (fraction * 100).toInt().coerceIn(0, 100)
         emit(job.songId, "inferring", fraction, "正在分离人声… $pct%$backendTag")
-        // 每 2% 刷一次通知；起点/终点必刷
-        if (pct <= 1 || pct >= 99 || pct % 2 == 0) {
+        // 每 1% 刷一次通知；起点/终点必刷
+        if (pct <= 1 || pct >= 99 || pct % 1 == 0) {
           renderNotification(pct, "AI 分离中 $pct%$backendTag", false)
         }
       }
@@ -508,9 +508,8 @@ class VocalSepService : Service() {
 
   /**
    * 渲染/更新前台通知。
-   * 前台服务存活期间重复调用 startForeground 是官方支持的通知更新方式，
-   * 比单独 NotificationManager.notify 更可靠（不受通知权限/厂商 ROM 冻结影响）；
-   * 若 startForeground 因系统限制失败，再退回 notify。
+   * 同时走 startForeground（官方保活方式）和 NotificationManager.notify（强制刷新内容），
+   * 解决 vivo 等 ROM 上 startForeground 不刷新通知进度的问题。
    */
   private fun renderNotification(pct: Int, text: String, indeterminate: Boolean) {
     val n = buildNotification(pct.coerceIn(0, 100), text, indeterminate)
@@ -520,11 +519,11 @@ class VocalSepService : Service() {
       } else {
         startForeground(NOTIF_ID, n)
       }
-    } catch (_: Throwable) {
-      try {
-        val mgr = getSystemService(NotificationManager::class.java)
-        mgr.notify(NOTIF_ID, n)
-      } catch (_: Exception) { /* 渠道未就绪等 */ }
-    }
+    } catch (_: Throwable) { /* ignore */ }
+    // 额外直接 notify，强制刷新通知内容（vivo 等 ROM 上 startForeground 不更新进度条）
+    try {
+      val mgr = getSystemService(NotificationManager::class.java)
+      mgr.notify(NOTIF_ID, n)
+    } catch (_: Exception) { /* 通知权限未授予等 */ }
   }
 }
