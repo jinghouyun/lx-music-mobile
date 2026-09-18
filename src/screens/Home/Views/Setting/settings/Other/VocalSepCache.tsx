@@ -17,7 +17,6 @@ export default memo(() => {
   const [importing, setImporting] = useState(false)
   const [cacheSize, setCacheSize] = useState<string | null>(null)
   const [songCount, setSongCount] = useState(0)
-  const [diag, setDiag] = useState<string | null>(null)
   const choosePathRef = useRef<ChoosePathType>(null)
   const actionRef = useRef<'export' | 'import'>('export')
 
@@ -25,20 +24,9 @@ export default memo(() => {
     void getVocalCacheInfo().then(info => {
       setCacheSize(sizeFormate(info.sizeBytes))
       setSongCount(info.songCount)
-      // 目录体检：统计为 0 时据此判断文件到底有没有落盘、落在哪个目录
-      const sub = info.rootEntries && info.rootEntries.length
-        ? info.rootEntries.join('\n')
-        : '（vocalsep 目录为空或不存在）'
-      let d = `缓存目录：${info.rootPath ?? '?'}\n存在：${info.rootExists ? '是' : '否'}（是目录=${info.rootIsDir ? '是' : '否'}）\n子项：\n${sub}`
-      if (info.workEntries && info.workEntries.length) d += `\nwork残留：${info.workEntries.join(', ')}`
-      if (info.filesDirEntries && info.filesDirEntries.length) d += `\nfilesDir：${info.filesDirEntries.join(' ')}`
-      if (info.history) d += `\n分离历史：\n${info.history.trim()}`
-      if (info.diagError) d += `\n原生异常：${info.diagError}`
-      setDiag(d)
     }).catch((e: any) => {
       setCacheSize('0B')
       setSongCount(0)
-      setDiag(`读取缓存信息失败：${e?.message ?? e}`)
     })
   }
 
@@ -140,10 +128,6 @@ export default memo(() => {
           {cleaning ? '清除中…' : '清除缓存'}
         </Button>
       </View>
-      {/* 缓存目录体检（排查“已分离却统计 0 首”），可长按选中复制 */}
-      {diag
-        ? <Text selectable size={11} style={styles.diag}>{diag}</Text>
-        : null}
       <ChoosePath ref={choosePathRef} onConfirm={onConfirmPath} />
     </SubTitle>
   )
@@ -159,10 +143,5 @@ const styles = StyleSheet.create({
   },
   clearBtn: {
     flexDirection: 'row',
-  },
-  diag: {
-    marginTop: 8,
-    color: '#999999',
-    lineHeight: 16,
   },
 })

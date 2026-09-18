@@ -97,7 +97,7 @@ export const storageDataPrefixOld = {
   notificationTipEnable: '@notification_tip_enable',
 } as const
 
-export const APP_PROVIDER_NAME = 'com.kugou.android.provider'
+export const APP_PROVIDER_NAME = 'com.apple.android.music.provider'
 
 
 export const NAV_MENUS = [

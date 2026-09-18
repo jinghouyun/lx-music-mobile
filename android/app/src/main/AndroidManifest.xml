@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   xmlns:tools="http://schemas.android.com/tools"
-  package="com.kugou.android">
+  package="com.apple.android.music">
 
     <!-- 获取读写外置存储权限 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
