@@ -236,4 +236,26 @@ export default async(setting: LX.AppSetting) => {
   })
 
   setUserApiList(await getUserApiList())
+
+  // 自动导入内置野花音源（首次启动时）
+  const userApiList = await getUserApiList()
+  if (userApiList.length === 0) {
+    try {
+      console.log('No user api found, importing built-in flower source...')
+      const flowerScript = require('@/resources/user-api/flower.js').default || require('@/resources/user-api/flower.js')
+      const { importUserApi } = await import('@/core/userApi')
+      await importUserApi(flowerScript)
+      console.log('Built-in flower source imported successfully')
+
+      // 自动切换到野花音源
+      const newList = await getUserApiList()
+      if (newList.length > 0) {
+        const { setApiSource } = await import('@/core/apiSource')
+        setApiSource(newList[0].id)
+        console.log('Switched to built-in flower source:', newList[0].name)
+      }
+    } catch (err) {
+      console.log('Failed to import built-in flower source:', err)
+    }
+  }
 }
