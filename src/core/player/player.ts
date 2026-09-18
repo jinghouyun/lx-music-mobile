@@ -4,6 +4,8 @@ import {
 } from '@/core/player/playStatus'
 import playerState from '@/store/player/state'
 import settingState from '@/store/setting/state'
+import userApiState from '@/store/userApi/state'
+import { setApiSource } from '@/core/apiSource'
 import {
   getList,
   setPlayMusicInfo,
@@ -140,9 +142,29 @@ export const setMusicUrl = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
   void getMusicPlayUrl(musicInfo, isRefresh).then((url) => {
     if (!url) return
     setResource(musicInfo, url, playerState.progress.nowPlayTime)
-  }).catch((err: any) => {
+  }).catch(async(err: any) => {
     console.log(err)
     setStatusText(err.message as string)
+
+    // 自动切换音源：如果有多个 userApi 音源，尝试切换到下一个
+    const userApiList = userApiState.list
+    if (userApiList.length > 1) {
+      const currentApiId = settingState.setting['common.apiSource']
+      const currentIndex = userApiList.findIndex(api => api.id === currentApiId)
+      if (currentIndex >= 0) {
+        const nextIndex = (currentIndex + 1) % userApiList.length
+        const nextApi = userApiList[nextIndex]
+        console.log(`Auto switch api source: ${currentApiId} -> ${nextApi.id} (${nextApi.name})`)
+        setStatusText(`切换音源：${nextApi.name}`)
+        setApiSource(nextApi.id)
+        // 等待音源初始化后重试播放
+        setTimeout(() => {
+          setMusicUrl(musicInfo, true)
+        }, 2000)
+        return
+      }
+    }
+
     global.app_event.error()
     addDelayNextTimeout()
   }).finally(() => {
