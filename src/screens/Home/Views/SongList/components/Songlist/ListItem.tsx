@@ -43,42 +43,41 @@ export default memo(({ item, index, width, showSource, onPress }: {
 
 const styles = createStyle({
   listItem: {
-    // width: 90,
-    margin: 10,
+    margin: 8,
   },
   listItemImg: {
-    // backgroundColor: '#eee',
-    borderRadius: 4,
-    marginBottom: 5,
+    borderRadius: 12,
+    marginBottom: 8,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: {
           width: 0,
-          height: 1,
+          height: 2,
         },
-        shadowOpacity: 0.20,
-        shadowRadius: 1.41,
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 2,
+        elevation: 3,
       },
     }),
   },
   sourceLabel: {
-    paddingLeft: 4,
-    paddingBottom: 2,
-    paddingRight: 4,
+    paddingLeft: 6,
+    paddingBottom: 3,
+    paddingTop: 3,
+    paddingRight: 6,
     position: 'absolute',
     top: 0,
     right: 0,
-    borderBottomLeftRadius: 3,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderBottomLeftRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   listItemTitle: {
-    fontSize: 12,
-    // overflow: 'hidden',
-    marginBottom: 5,
+    fontSize: 13,
+    marginBottom: 4,
+    fontWeight: '500',
   },
 })

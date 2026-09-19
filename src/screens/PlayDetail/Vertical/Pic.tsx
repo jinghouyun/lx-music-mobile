@@ -33,13 +33,13 @@ export default ({ componentId }: { componentId: string }) => {
     return {
       width: imgWidth,
       height: imgWidth,
-      borderRadius: 2,
+      borderRadius: 24,
     }
   }, [statusBarHeight, winHeight, winWidth])
 
   return (
     <View style={styles.container}>
-      <View style={{ ...styles.content, elevation: animated ? 3 : 0 }}>
+      <View style={{ ...styles.content, elevation: animated ? 8 : 0 }}>
         <Image url={pic} nativeID={NAV_SHEAR_NATIVE_IDS.playDetail_pic} style={style} />
       </View>
     </View>
@@ -52,11 +52,13 @@ const styles = createStyle({
     flexShrink: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    // backgroundColor: 'rgba(0,0,0,0.1)',
   },
   content: {
-    // elevation: 3,
     backgroundColor: 'rgba(0,0,0,0)',
-    borderRadius: 4,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
   },
 })
