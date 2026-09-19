@@ -2,9 +2,9 @@ package com.apple.android.music.vivo;
 
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.v4.media.MediaBrowserCompat;
-import android.support.v4.media.MediaDescriptionCompat;
-import android.support.v4.media.session.MediaSessionCompat;
+import androidx.media.MediaBrowserCompat;
+import androidx.media.MediaDescriptionCompat;
+import androidx.media.session.MediaSessionCompat;
 import androidx.media.MediaBrowserServiceCompat;
 
 import com.guichaguri.trackplayer.service.MediaSessionHolder;

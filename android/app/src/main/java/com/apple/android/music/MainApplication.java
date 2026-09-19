@@ -1,5 +1,6 @@
 package com.apple.android.music;
 
+import cn.toside.music.mobile.BuildConfig;
 import com.facebook.react.PackageList;
 import com.facebook.react.flipper.ReactNativeFlipper;
 import com.reactnativenavigation.NavigationApplication;

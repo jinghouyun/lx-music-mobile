@@ -26,7 +26,7 @@ import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.apple.android.music.R;
+import cn.toside.music.mobile.R;
 
 public class LyricView extends Activity implements View.OnTouchListener {
   LyricSwitchView textView = null;
