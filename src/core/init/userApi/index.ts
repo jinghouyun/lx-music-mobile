@@ -237,25 +237,40 @@ export default async(setting: LX.AppSetting) => {
 
   setUserApiList(await getUserApiList())
 
-  // 自动导入内置野花音源（首次启动时）
+  // 自动导入内置音源（首次启动时）
   const userApiList = await getUserApiList()
   if (userApiList.length === 0) {
     try {
-      console.log('No user api found, importing built-in flower source...')
-      const flowerScript = require('@/resources/user-api/flower.js').default || require('@/resources/user-api/flower.js')
+      console.log('No user api found, importing built-in sources...')
       const { importUserApi } = await import('@/core/userApi')
-      await importUserApi(flowerScript)
-      console.log('Built-in flower source imported successfully')
 
-      // 自动切换到野花音源
+      // 按顺序导入所有内置音源
+      const sources = [
+        require('@/resources/user-api/listen1.js'),
+        require('@/resources/user-api/flower.js'),
+        require('@/resources/user-api/grass.js'),
+        require('@/resources/user-api/ikun.js'),
+        require('@/resources/user-api/sixyin.js'),
+      ]
+
+      for (const source of sources) {
+        try {
+          await importUserApi(source)
+          console.log('Imported built-in source successfully')
+        } catch (err) {
+          console.log('Failed to import one source, skipping:', err)
+        }
+      }
+
+      // 自动切换到第一个可用的音源
       const newList = await getUserApiList()
       if (newList.length > 0) {
         const { setApiSource } = await import('@/core/apiSource')
         setApiSource(newList[0].id)
-        console.log('Switched to built-in flower source:', newList[0].name)
+        console.log('Switched to built-in source:', newList[0].name)
       }
     } catch (err) {
-      console.log('Failed to import built-in flower source:', err)
+      console.log('Failed to import built-in sources:', err)
     }
   }
 }
