@@ -12,24 +12,23 @@ import Text from '@/components/common/Text'
 const styles = createStyle({
   container: {
     flexDirection: 'row',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'android' ? 12 : 16,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'android' ? 8 : 10,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 20,
   },
   tabIcon: {
     marginBottom: 2,
   },
   tabText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
   },
 })
@@ -40,7 +39,10 @@ const TabItem = ({ id, icon, isActive }: { id: NAV_ID_Type; icon: string; isActi
 
   return (
     <TouchableOpacity
-      style={styles.tabItem}
+      style={[
+        styles.tabItem,
+        isActive ? { backgroundColor: theme['c-primary-light-100'] } : null,
+      ]}
       onPress={() => {
         if (!isActive) setNavActiveId(id)
       }}
@@ -55,7 +57,7 @@ const TabItem = ({ id, icon, isActive }: { id: NAV_ID_Type; icon: string; isActi
       </View>
       <Text
         style={styles.tabText}
-        size={11}
+        size={12}
         color={isActive ? theme['c-primary'] : theme['c-font-label']}
       >
         {t(id)}
@@ -73,6 +75,8 @@ export default memo(() => {
       style={{
         ...styles.container,
         backgroundColor: theme['c-content-background'],
+        borderTopWidth: 0.5,
+        borderTopColor: theme['c-border-color'],
       }}
     >
       {NAV_MENUS.map(menu => (

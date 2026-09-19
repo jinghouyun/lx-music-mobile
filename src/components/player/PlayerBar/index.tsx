@@ -20,22 +20,21 @@ const styles = createStyle({
     alignItems: 'center',
     marginHorizontal: scaleSizeW(12),
     marginBottom: 8,
-    height: 56,
-    borderRadius: 28,
+    height: 60,
+    borderRadius: 20,
     paddingLeft: 6,
     paddingRight: 8,
-    elevation: 8,
+    elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
   },
   coverWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 10,
     overflow: 'hidden',
-    borderWidth: 2,
   },
   cover: {
     width: '100%',
@@ -59,9 +58,9 @@ const styles = createStyle({
     alignItems: 'center',
   },
   playBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
@@ -89,7 +88,7 @@ const MiniPlayerBar = ({ isHome }: { isHome?: boolean }) => {
     <View style={{ ...styles.container, backgroundColor: theme['c-content-background'] }}>
       {/* 左侧封面 */}
       <TouchableOpacity onPress={handlePressCover} activeOpacity={0.8}>
-        <View style={{ ...styles.coverWrap, borderColor: theme['c-primary-light-100'] }}>
+        <View style={styles.coverWrap}>
           <Image url={musicInfo.pic} style={styles.cover} resizeMode="cover" />
         </View>
       </TouchableOpacity>
