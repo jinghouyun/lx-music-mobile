@@ -6,9 +6,7 @@ import { isTempId, isEmpty } from './utils'
 // import { play as lrcPlay, pause as lrcPause } from '@/core/lyric'
 import { exitApp } from '@/core/common'
 import { getCurrentTrackId } from './playList'
-import { pause, play, playNext, playPrev, playList } from '@/core/player/player'
-import { handleVivoBrowserPlay } from '@/core/player/vivoPlay'
-import playerState from '@/store/player/state'
+import { pause, play, playNext, playPrev } from '@/core/player/player'
 
 let isInitialized = false
 
@@ -48,18 +46,6 @@ const registerPlaybackService = async() => {
   TrackPlayer.addEventListener(TPEvent.RemotePrevious, () => {
     // console.log('remote-previous')
     void playPrev()
-  })
-
-  // 原子随身听/系统媒体“播放列表”里点歌：按当前列表下标切歌
-  // 事件名用字符串（补丁在原生侧 emit “remote-queue-item”，不依赖 RNTP 会被裁掉的 src 枚举）
-  TrackPlayer.addEventListener('remote-queue-item' as TPEvent, async({ index }: { index: number }) => {
-    const listId = playerState.playInfo.playerListId
-    if (listId == null || typeof index != 'number' || index < 0) return
-    void playList(listId, index)
-  })
-  // 原子随身听“本地音乐”浏览树（播放列表/收藏列表/下载列表）点歌
-  TrackPlayer.addEventListener(TPEvent.RemotePlayId, ({ id }: { id: string }) => {
-    void handleVivoBrowserPlay(id)
   })
 
   TrackPlayer.addEventListener(TPEvent.RemoteStop, () => {

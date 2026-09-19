@@ -1,4 +1,4 @@
-import { initSetting } from '@/core/common'
+import { initSetting, showPactModal } from '@/core/common'
 import registerPlaybackService from '@/plugins/player/service'
 import initTheme from './theme'
 import initI18n from './i18n'
@@ -8,19 +8,25 @@ import dataInit from './dataInit'
 import initSync from './sync'
 import initCommonState from './common'
 import { initDeeplink } from './deeplink'
-import { initDownloadTasks } from '@/core/download'
 import { setApiSource } from '@/core/apiSource'
 import commonActions from '@/store/common/action'
+import settingState from '@/store/setting/state'
 import { checkUpdate } from '@/core/version'
 import { bootLog } from '@/utils/bootLog'
+import { cheatTip } from '@/utils/tools'
 
 let isFirstPush = true
 const handlePushedHomeScreen = async() => {
-  // 已移除：启动「谨防被骗」弹窗与「许可协议」签署弹窗，进入首页直接初始化
-  if (isFirstPush) {
-    isFirstPush = false
-    void checkUpdate()
-    void initDeeplink()
+  await cheatTip()
+  if (settingState.setting['common.isAgreePact']) {
+    if (isFirstPush) {
+      isFirstPush = false
+      void checkUpdate()
+      void initDeeplink()
+    }
+  } else {
+    if (isFirstPush) isFirstPush = false
+    showPactModal()
   }
 }
 
@@ -32,6 +38,7 @@ export default async() => {
   bootLog('Font size changed.')
   const setting = await initSetting()
   bootLog('Setting inited.')
+  // console.log(setting)
 
   await initTheme(setting)
   bootLog('Theme inited.')
@@ -48,19 +55,15 @@ export default async() => {
   bootLog('Playback Service Registered.')
   await initPlayer(setting)
   bootLog('Player inited.')
-  const { initVocalSeparation } = await import('@/core/vocalSeparation')
-  await initVocalSeparation()
-  bootLog('Vocal separation inited.')
   await dataInit(setting)
   bootLog('Data inited.')
   await initCommonState(setting)
   bootLog('Common State inited.')
 
-  void initDownloadTasks()
-  bootLog('Download tasks inited.')
-
   void initSync(setting)
   bootLog('Sync inited.')
+
+  // syncSetting()
 
   isInited ||= true
 

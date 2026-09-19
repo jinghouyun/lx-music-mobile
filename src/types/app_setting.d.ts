@@ -142,7 +142,7 @@ declare global {
       'player.playbackRate': number
 
       /**
-       * 缓存大小设置 unit MB
+       * 缓存大小设置 unit MiB
        */
       'player.cacheSize': string
 
@@ -349,87 +349,7 @@ declare global {
       /**
        * 文件命名方式
        */
-      /**
-       * 是否启用下载
-       */
-      'download.enable': boolean
-
       'download.fileName': '歌名 - 歌手' | '歌手 - 歌名' | '歌名'
-
-      /**
-       * 下载保存路径
-       */
-      'download.savePath': string
-
-      /**
-       * 最大同时下载数
-       */
-      'download.maxDownloadNum': number
-
-      /**
-       * 跳过已存在的文件
-       */
-      'download.skipExistFile': boolean
-
-      /**
-       * 下载时尝试使用其他源
-       */
-      'download.isUseOtherSource': boolean
-
-      /**
-       * 是否按歌单名分组保存
-       */
-      'download.isSavePathGroupByListName': boolean
-
-      /**
-       * 是否嵌入封面到音乐文件
-       */
-      'download.isEmbedPic': boolean
-
-      /**
-       * 是否嵌入歌词到音乐文件
-       */
-      'download.isEmbedLyric': boolean
-
-      /**
-       * 是否嵌入翻译歌词到音乐文件
-       */
-      'download.isEmbedLyricT': boolean
-
-      /**
-       * 是否嵌入罗马音歌词到音乐文件
-       */
-      'download.isEmbedLyricR': boolean
-
-      /**
-       * 是否嵌入逐字歌词到音乐文件
-       */
-      'download.isEmbedLyricLx': boolean
-
-      /**
-       * 是否下载歌词文件
-       */
-      'download.isDownloadLrc': boolean
-
-      /**
-       * 是否下载翻译歌词
-       */
-      'download.isDownloadTLrc': boolean
-
-      /**
-       * 是否下载罗马音歌词
-       */
-      'download.isDownloadRLrc': boolean
-
-      /**
-       * 是否下载逐字歌词
-       */
-      'download.isDownloadLxLrc': boolean
-
-      /**
-       * 歌词文件编码格式
-       */
-      'download.lrcFormat': 'utf8' | 'gbk'
 
       /**
        * 是否启用同步

@@ -4,7 +4,6 @@ import { defaultUrl } from '@/config'
 // import { action as playerAction } from '@/store/modules/player'
 import settingState from '@/store/setting/state'
 import playerState from '@/store/player/state'
-import { buildMediaSessionLyricInfo } from '@/plugins/player/lyricInfo'
 
 
 const list: LX.Player.Track[] = []
@@ -39,14 +38,6 @@ const getCurrentFullLyric = (targetId: string | null) => {
     ? playerState.musicInfo.lrc
     : undefined
 }
-// vivo 原子岛/原子随身听歌词：不受“蓝牙完整歌词”开关限制，当前歌曲有 LRC 时
-// 按系统约定封装成 lyricInfo JSON 写入 MediaSession
-const getCurrentLyricInfo = (targetId: string | null) => {
-  const info = playerState.musicInfo
-  if (!targetId || info.id != targetId || !info.lrc) return undefined
-  const json = buildMediaSessionLyricInfo(info, info.lrc, info.tlrc, info.rlrc)
-  return json || undefined
-}
 
 const buildTracks = (musicInfo: LX.Player.PlayMusic, url?: LX.Player.Track['url'], duration?: LX.Player.Track['duration']): LX.Player.Track[] => {
   const mInfo = formatMusicInfo(musicInfo)
@@ -55,7 +46,6 @@ const buildTracks = (musicInfo: LX.Player.PlayMusic, url?: LX.Player.Track['url'
   const album = mInfo.album || undefined
   const artwork = isShowNotificationImage && mInfo.pic && httpRxp.test(mInfo.pic) ? mInfo.pic : undefined
   const lyric = getCurrentFullLyric(mInfo.id)
-  const lyricInfo = getCurrentLyricInfo(mInfo.id)
   if (url) {
     track.push({
       id: `${mInfo.id}__//${Math.random()}__//${url}`,
@@ -67,7 +57,6 @@ const buildTracks = (musicInfo: LX.Player.PlayMusic, url?: LX.Player.Track['url'
       userAgent: defaultUserAgent,
       musicId: mInfo.id,
       lyric,
-      lyricInfo,
       // original: { ...musicInfo },
       duration,
     })
@@ -81,7 +70,6 @@ const buildTracks = (musicInfo: LX.Player.PlayMusic, url?: LX.Player.Track['url'
     artwork,
     musicId: mInfo.id,
     lyric,
-    lyricInfo,
     // original: { ...musicInfo },
     duration: 0,
   })
@@ -241,7 +229,6 @@ const updateMetaInfo = async(mInfo: LX.Player.MusicInfo) => {
     artwork,
     duration: state.prevDuration || 0,
     lyric: getCurrentFullLyric(mInfo.id),
-    lyricInfo: getCurrentLyricInfo(mInfo.id),
   }, state.isPlaying)
 }
 

@@ -4,7 +4,6 @@ import Search from '../Views/Search'
 import SongList from '../Views/SongList'
 import Mylist from '../Views/Mylist'
 import Leaderboard from '../Views/Leaderboard'
-import Download from '../Views/Download'
 import Setting from '../Views/Setting'
 import commonState, { type InitState as CommonState } from '@/store/common/state'
 import { createStyle } from '@/utils/tools'
@@ -18,58 +17,160 @@ const hideKeys = [
   'theme.fontShadow',
 ] as Readonly<Array<keyof LX.AppSetting>>
 
-const makePage = (activeKey: CommonState['navActiveId'], component: React.ReactNode) => {
-  const Page = () => {
-    const [visible, setVisible] = useState(commonState.navActiveId == activeKey)
-    const memoComponent = useMemo(() => component, [])
-    useEffect(() => {
-      let currentId: CommonState['navActiveId'] = commonState.navActiveId
-      const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
-        currentId = id
-        if (id == activeKey) {
-          requestAnimationFrame(() => { setVisible(true) })
-        }
+const SearchPage = () => {
+  const [visible, setVisible] = useState(commonState.navActiveId == 'nav_search')
+  const component = useMemo(() => <Search />, [])
+  useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
+    const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
+      if (id == 'nav_search') {
+        requestAnimationFrame(() => {
+          setVisible(true)
+        })
       }
-      const handleHide = () => {
-        if (currentId != 'nav_setting') return
-        setVisible(false)
-      }
-      const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
-        if (keys.some(k => hideKeys.includes(k))) handleHide()
-      }
-      global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
-      global.state_event.on('themeUpdated', handleHide)
-      global.state_event.on('languageChanged', handleHide)
-      global.state_event.on('configUpdated', handleConfigUpdated)
+    }
+    const handleHide = () => {
+      if (currentId != 'nav_setting') return
+      setVisible(false)
+    }
+    const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
+      if (keys.some(k => hideKeys.includes(k))) handleHide()
+    }
+    global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
+    global.state_event.on('themeUpdated', handleHide)
+    global.state_event.on('languageChanged', handleHide)
+    global.state_event.on('configUpdated', handleConfigUpdated)
 
-      return () => {
-        global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
-        global.state_event.off('themeUpdated', handleHide)
-        global.state_event.off('languageChanged', handleHide)
-        global.state_event.off('configUpdated', handleConfigUpdated)
-      }
-    }, [])
+    return () => {
+      global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
+      global.state_event.off('themeUpdated', handleHide)
+      global.state_event.off('languageChanged', handleHide)
+      global.state_event.off('configUpdated', handleConfigUpdated)
+    }
+  }, [])
 
-    return visible ? memoComponent : null
-  }
-  return Page
+  return visible ? component : null
 }
+const SongListPage = () => {
+  const [visible, setVisible] = useState(commonState.navActiveId == 'nav_songlist')
+  const component = useMemo(() => <SongList />, [])
+  useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
+    const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
+      if (id == 'nav_songlist') {
+        requestAnimationFrame(() => {
+          setVisible(true)
+        })
+      }
+    }
+    const handleHide = () => {
+      if (currentId != 'nav_setting') return
+      setVisible(false)
+    }
+    const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
+      if (keys.some(k => hideKeys.includes(k))) handleHide()
+    }
+    global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
+    global.state_event.on('themeUpdated', handleHide)
+    global.state_event.on('languageChanged', handleHide)
+    global.state_event.on('configUpdated', handleConfigUpdated)
 
-const SearchPage = makePage('nav_search', <Search />)
-const SongListPage = makePage('nav_songlist', <SongList />)
-const LeaderboardPage = makePage('nav_top', <Leaderboard />)
-const MylistPage = makePage('nav_love', <Mylist />)
-const DownloadPage = makePage('nav_download', <Download />)
+    return () => {
+      global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
+      global.state_event.off('themeUpdated', handleHide)
+      global.state_event.off('languageChanged', handleHide)
+      global.state_event.on('configUpdated', handleConfigUpdated)
+    }
+  }, [])
+
+  return visible ? component : null
+  // return activeId == 1 || activeId == 0  ? SongList : null
+}
+const LeaderboardPage = () => {
+  const [visible, setVisible] = useState(commonState.navActiveId == 'nav_top')
+  const component = useMemo(() => <Leaderboard />, [])
+  useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
+    const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
+      if (id == 'nav_top') {
+        requestAnimationFrame(() => {
+          setVisible(true)
+        })
+      }
+    }
+    const handleHide = () => {
+      if (currentId != 'nav_setting') return
+      setVisible(false)
+    }
+    const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
+      if (keys.some(k => hideKeys.includes(k))) handleHide()
+    }
+    global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
+    global.state_event.on('themeUpdated', handleHide)
+    global.state_event.on('languageChanged', handleHide)
+    global.state_event.on('configUpdated', handleConfigUpdated)
+
+    return () => {
+      global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
+      global.state_event.off('themeUpdated', handleHide)
+      global.state_event.off('languageChanged', handleHide)
+      global.state_event.on('configUpdated', handleConfigUpdated)
+    }
+  }, [])
+
+  return visible ? component : null
+}
+const MylistPage = () => {
+  const [visible, setVisible] = useState(commonState.navActiveId == 'nav_love')
+  const component = useMemo(() => <Mylist />, [])
+  useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
+    const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
+      if (id == 'nav_love') {
+        requestAnimationFrame(() => {
+          setVisible(true)
+        })
+      }
+    }
+    const handleHide = () => {
+      if (currentId != 'nav_setting') return
+      setVisible(false)
+    }
+    const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
+      if (keys.some(k => hideKeys.includes(k))) handleHide()
+    }
+    global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
+    global.state_event.on('themeUpdated', handleHide)
+    global.state_event.on('languageChanged', handleHide)
+    global.state_event.on('configUpdated', handleConfigUpdated)
+
+    return () => {
+      global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
+      global.state_event.off('themeUpdated', handleHide)
+      global.state_event.off('languageChanged', handleHide)
+      global.state_event.on('configUpdated', handleConfigUpdated)
+    }
+  }, [])
+
+  return visible ? component : null
+}
 const SettingPage = () => {
   const [visible, setVisible] = useState(commonState.navActiveId == 'nav_setting')
   const component = useMemo(() => <Setting />, [])
   useEffect(() => {
     const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
       if (id == 'nav_setting') {
-        requestAnimationFrame(() => { setVisible(true) })
+        requestAnimationFrame(() => {
+          setVisible(true)
+        })
       }
     }
     global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
+
     return () => {
       global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
     }
@@ -82,23 +183,39 @@ const viewMap = {
   nav_songlist: 1,
   nav_top: 2,
   nav_love: 3,
-  nav_download: 4,
-  nav_setting: 5,
+  nav_setting: 4,
 }
 const indexMap = [
   'nav_search',
   'nav_songlist',
   'nav_top',
   'nav_love',
-  'nav_download',
   'nav_setting',
 ] as const
 
 const Main = () => {
   const pagerViewRef = useRef<ComponentRef<typeof PagerView>>(null)
-  const activeIndexRef = useRef(viewMap[commonState.navActiveId])
+  let activeIndexRef = useRef(viewMap[commonState.navActiveId])
+  // const isScrollingRef = useRef(false)
+  // const scrollPositionRef = useRef(-1)
+
+  // const handlePageScroll = useCallback(({ nativeEvent }) => {
+  //   console.log(nativeEvent.offset, activeIndexRef.current)
+  //   // if (activeIndexRef.current == -1) return
+  //   // if (nativeEvent.offset == 0) {
+  //   //   isScrollingRef.current = false
+
+  //   //   const index = nativeEvent.position
+  //   //   if (activeIndexRef.current == index) return
+  //   //   activeIndexRef.current = index
+  //   //   setNavActiveIndex(index)
+  //   // } else if (!isScrollingRef.current) {
+  //   //   isScrollingRef.current = true
+  //   // }
+  // }, [setNavActiveIndex])
 
   const onPageSelected = useCallback(({ nativeEvent }: PagerViewOnPageSelectedEvent) => {
+    // console.log(nativeEvent)
     activeIndexRef.current = nativeEvent.position
     if (activeIndexRef.current != viewMap[commonState.navActiveId]) {
       setNavActiveId(indexMap[activeIndexRef.current])
@@ -106,8 +223,24 @@ const Main = () => {
   }, [])
 
   const onPageScrollStateChanged = useCallback(({ nativeEvent }: PageScrollStateChangedNativeEvent) => {
+    // console.log(nativeEvent)
     const idle = nativeEvent.pageScrollState == 'idle'
     if (global.lx.homePagerIdle != idle) global.lx.homePagerIdle = idle
+    // if (nativeEvent.pageScrollState != 'idle') return
+    // if (scrollPositionRef.current != commonState.navActiveIndex) {
+    //   setNavActiveIndex(scrollPositionRef.current)
+    // }
+    // if (activeIndexRef.current == -1) return
+    // if (nativeEvent.offset == 0) {
+    //   isScrollingRef.current = false
+
+    //   const index = nativeEvent.position
+    //   if (activeIndexRef.current == index) return
+    //   activeIndexRef.current = index
+    //   setNavActiveIndex(index)
+    // } else if (!isScrollingRef.current) {
+    //   isScrollingRef.current = true
+    // }
   }, [])
 
   useEffect(() => {
@@ -121,6 +254,7 @@ const Main = () => {
       if (!keys.includes('common.homePageScroll')) return
       pagerViewRef.current?.setScrollEnabled(setting['common.homePageScroll']!)
     }
+    // window.requestAnimationFrame(() => pagerViewRef.current && pagerViewRef.current.setPage(activeIndexRef.current))
     global.state_event.on('navActiveIdUpdated', handleUpdate)
     global.state_event.on('configUpdated', handleConfigUpdate)
     return () => {
@@ -133,6 +267,7 @@ const Main = () => {
   const component = useMemo(() => (
     <PagerView ref={pagerViewRef}
       initialPage={activeIndexRef.current}
+      // onPageScroll={handlePageScroll}
       offscreenPageLimit={1}
       onPageSelected={onPageSelected}
       onPageScrollStateChanged={onPageScrollStateChanged}
@@ -151,12 +286,24 @@ const Main = () => {
       <View collapsable={false} key="nav_love" style={styles.pageStyle}>
         <MylistPage />
       </View>
-      <View collapsable={false} key="nav_download" style={styles.pageStyle}>
-        <DownloadPage />
-      </View>
       <View collapsable={false} key="nav_setting" style={styles.pageStyle}>
         <SettingPage />
       </View>
+      {/* <View collapsable={false} key="nav_search" style={styles.pageStyle}>
+        <Search />
+      </View>
+      <View collapsable={false} key="nav_songlist" style={styles.pageStyle}>
+        <SongList />
+      </View>
+      <View collapsable={false} key="nav_top" style={styles.pageStyle}>
+        <Leaderboard />
+      </View>
+      <View collapsable={false} key="nav_love" style={styles.pageStyle}>
+        <Mylist />
+      </View>
+      <View collapsable={false} key="nav_setting" style={styles.pageStyle}>
+        <Setting />
+      </View> */}
     </PagerView>
   ), [onPageScrollStateChanged, onPageSelected])
 
@@ -168,8 +315,12 @@ const styles = createStyle({
     flex: 1,
     overflow: 'hidden',
   },
-  pageStyle: {},
+  pageStyle: {
+    // alignItems: 'center',
+    // padding: 20,
+  },
 })
 
 
 export default Main
+

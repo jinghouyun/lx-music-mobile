@@ -6,11 +6,11 @@ import Player from '../settings/Player'
 import LyricDesktop from '../settings/LyricDesktop'
 import Search from '../settings/Search'
 import List from '../settings/List'
-import Download from '../settings/Download'
 import Sync from '../settings/Sync'
 import Backup from '../settings/Backup'
 import Other from '../settings/Other'
 import Version from '../settings/Version'
+import About from '../settings/About'
 import { createStyle } from '@/utils/tools'
 import { SETTING_SCREENS, type SettingScreenIds } from '../Main'
 
@@ -35,11 +35,11 @@ const ListItem = memo(({
     case 'lyric_desktop': return <LyricDesktop />
     case 'search': return <Search />
     case 'list': return <List />
-    case 'download': return <Download />
     case 'sync': return <Sync />
     case 'backup': return <Backup />
     case 'other': return <Other />
     case 'version': return <Version />
+    case 'about': return <About />
     case 'basic': return <Basic />
   }
 }, () => true)

@@ -5,11 +5,11 @@ import Player from './settings/Player'
 import LyricDesktop from './settings/LyricDesktop'
 import Search from './settings/Search'
 import List from './settings/List'
-import Download from './settings/Download'
 import Sync from './settings/Sync'
 import Backup from './settings/Backup'
 import Other from './settings/Other'
 import Version from './settings/Version'
+import About from './settings/About'
 
 export const SETTING_SCREENS = [
   'basic',
@@ -17,15 +17,18 @@ export const SETTING_SCREENS = [
   'lyric_desktop',
   'search',
   'list',
-  'download',
   'sync',
   'backup',
   'other',
   'version',
+  'about',
 ] as const
 
 export type SettingScreenIds = typeof SETTING_SCREENS[number]
 
+// interface MainProps {
+//   onUpdateActiveId: (id: string) => void
+// }
 export interface MainType {
   setActiveId: (id: SettingScreenIds) => void
 }
@@ -49,11 +52,11 @@ const Main = forwardRef<MainType, {}>((props, ref) => {
       case 'lyric_desktop': return <LyricDesktop />
       case 'search': return <Search />
       case 'list': return <List />
-      case 'download': return <Download />
       case 'sync': return <Sync />
       case 'backup': return <Backup />
       case 'other': return <Other />
       case 'version': return <Version />
+      case 'about': return <About />
       case 'basic':
       default: return <Basic />
     }
@@ -64,3 +67,4 @@ const Main = forwardRef<MainType, {}>((props, ref) => {
 
 
 export default Main
+

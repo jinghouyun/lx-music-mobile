@@ -3,7 +3,6 @@ import BackgroundTimer from 'react-native-background-timer'
 import { playMusic as handlePlayMusic } from './playList'
 import { existsFile, moveFile, privateStorageDirectoryPath, temporaryDirectoryPath } from '@/utils/fs'
 import { toast } from '@/utils/tools'
-import { notifyPlayerSeek } from '@/core/vocalSeparation'
 // import { PlayerMusicInfo } from '@/store/modules/player/playInfo'
 
 
@@ -166,11 +165,7 @@ export const setLoop = async(loop: boolean) => TrackPlayer.setRepeatMode(loop ? 
 
 export const setPause = async() => TrackPlayer.pause()
 // export const skipToNext = () => TrackPlayer.skipToNext()
-export const setCurrentTime = async(time: number) => {
-  await TrackPlayer.seekTo(time)
-  // 人声分离混音进行中：立即让双轨混音跟随跳转（事件级同步，不等 500ms 轮询）
-  notifyPlayerSeek(time)
-}
+export const setCurrentTime = async(time: number) => TrackPlayer.seekTo(time)
 export const setVolume = async(num: number) => TrackPlayer.setVolume(num)
 export const setPlaybackRate = async(num: number) => TrackPlayer.setRate(num)
 export interface NowPlayingTitles {
@@ -178,11 +173,9 @@ export interface NowPlayingTitles {
   artist?: string
   album?: string
   lyric?: string
-  // vivo 原子随身听读取的完整 LRC 歌词（带时间戳）
-  lyricInfo?: string
 }
 export const updateNowPlayingTitles = async(titles: NowPlayingTitles) => {
-  console.log('set playing titles', titles)
+  // console.log('set playing titles', titles)
   return TrackPlayer.updateNowPlayingTitles(titles)
 }
 
@@ -269,8 +262,6 @@ export const updateOptions = async(options = {
     Capability.SeekTo,
     Capability.SkipToNext,
     Capability.SkipToPrevious,
-    // 允许系统媒体/原子随身听“播放列表”点歌回调（ACTION_SKIP_TO_QUEUE_ITEM）
-    Capability.Skip,
   ],
 
   notificationCapabilities: [
@@ -279,7 +270,6 @@ export const updateOptions = async(options = {
     Capability.Stop,
     Capability.SkipToNext,
     Capability.SkipToPrevious,
-    Capability.Skip,
   ],
 
   // // An array of capabilities that will show up when the notification is in the compact form on Android

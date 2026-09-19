@@ -77,8 +77,6 @@ declare global {
 
       interface Track extends RNTrack {
         musicId: string
-        // vivo 原子随身听读取的完整 LRC 歌词（带时间戳）
-        lyricInfo?: string
         // original: PlayMusic
         // quality: LX.Quality
       }
