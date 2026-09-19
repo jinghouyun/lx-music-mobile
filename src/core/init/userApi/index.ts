@@ -237,40 +237,46 @@ export default async(setting: LX.AppSetting) => {
 
   setUserApiList(await getUserApiList())
 
-  // 自动导入内置音源（首次启动时）
-  const userApiList = await getUserApiList()
-  if (userApiList.length === 0) {
-    try {
-      console.log('No user api found, importing built-in sources...')
-      const { importUserApi } = await import('@/core/userApi')
+  // 自动导入内置音源（缺哪个补哪个，覆盖安装也能更新）
+  try {
+    console.log('Checking built-in sources...')
+    const { importUserApi } = await import('@/core/userApi')
 
-      // 按顺序导入所有内置音源
-      const sources = [
-        require('@/resources/user-api/listen1.js'),
-        require('@/resources/user-api/flower.js'),
-        require('@/resources/user-api/grass.js'),
-        require('@/resources/user-api/ikun.js'),
-        require('@/resources/user-api/sixyin.js'),
-      ]
+    // 所有内置音源
+    const sources = [
+      require('@/resources/user-api/listen1.js'),
+      require('@/resources/user-api/flower.js'),
+      require('@/resources/user-api/grass.js'),
+      require('@/resources/user-api/ikun.js'),
+      require('@/resources/user-api/sixyin.js'),
+    ]
 
-      for (const source of sources) {
-        try {
-          await importUserApi(source)
-          console.log('Imported built-in source successfully')
-        } catch (err) {
-          console.log('Failed to import one source, skipping:', err)
-        }
+    // 已有音源的名称列表
+    const existingNames = new Set((await getUserApiList()).map(api => api.name))
+
+    let importedCount = 0
+    for (const source of sources) {
+      // 从脚本头部提取 @name
+      const nameMatch = source.match(/@name\s+(.+?)(\n|$)/)
+      const sourceName = nameMatch ? nameMatch[1].trim() : 'unknown'
+
+      if (existingNames.has(sourceName)) {
+        console.log('Source already exists, skip:', sourceName)
+        continue
       }
 
-      // 自动切换到第一个可用的音源
-      const newList = await getUserApiList()
-      if (newList.length > 0) {
-        const { setApiSource } = await import('@/core/apiSource')
-        setApiSource(newList[0].id)
-        console.log('Switched to built-in source:', newList[0].name)
+      try {
+        await importUserApi(source)
+        existingNames.add(sourceName)
+        importedCount++
+        console.log('Imported built-in source:', sourceName)
+      } catch (err) {
+        console.log('Failed to import source:', sourceName, err)
       }
-    } catch (err) {
-      console.log('Failed to import built-in sources:', err)
     }
+
+    console.log(`Built-in sources check done. Imported: ${importedCount}`)
+  } catch (err) {
+    console.log('Failed to check built-in sources:', err)
   }
 }
