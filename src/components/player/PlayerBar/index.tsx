@@ -108,11 +108,21 @@ const MiniPlayerBar = ({ isHome }: { isHome?: boolean }) => {
       {/* 右侧控制按钮 */}
       <View style={styles.controls}>
         <TouchableOpacity
-          style={{ ...styles.playBtn, backgroundColor: theme['c-primary-light-100'] }}
           onPress={handleTogglePlay}
           activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Icon name={isPlay ? 'pause' : 'play'} color={theme['c-primary']} size={18} />
+          <Icon name={isPlay ? 'pause' : 'play'} color={theme['c-font']} size={24} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.listBtn}
+          onPress={() => {
+            // TODO: 打开播放列表
+          }}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="list" color={theme['c-font-label']} size={22} />
         </TouchableOpacity>
       </View>
     </View>

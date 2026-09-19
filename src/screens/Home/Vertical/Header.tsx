@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, Platform } from 'react-native'
+import { View, TouchableOpacity } from 'react-native'
 import { useTheme } from '@/store/theme/hook'
 import { useNavActiveId, useStatusbarHeight } from '@/store/common/hook'
 import { useI18n } from '@/lang'
@@ -19,49 +19,31 @@ const styles = createStyle({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     zIndex: 10,
     borderBottomWidth: 0.5,
   },
-  leftSection: {
-    flexDirection: 'row',
+  menuBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    minWidth: 80,
-  },
-  logo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoText: {
-    fontSize: 20,
-    fontWeight: '700',
+    justifyContent: 'center',
   },
   centerSection: {
     flex: 1,
     alignItems: 'center',
   },
   titleText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
   },
   rightSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 80,
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40,
   },
 })
 
-const Header = () => {
+const Header = ({ onShowDrawer }: { onShowDrawer: () => void }) => {
   const theme = useTheme()
   const id = useNavActiveId()
   const t = useI18n()
@@ -79,15 +61,10 @@ const Header = () => {
           borderBottomColor: theme['c-border-color'],
         }}
       >
-        {/* 左侧：Logo */}
-        <View style={styles.leftSection}>
-          <View style={styles.logo}>
-            <Icon name="logo" size={24} color={theme['c-primary']} />
-            <Text style={{ marginLeft: 6 }} size={18} color={theme['c-primary']} bold>
-              Alger
-            </Text>
-          </View>
-        </View>
+        {/* 左侧：汉堡菜单 */}
+        <TouchableOpacity style={styles.menuBtn} onPress={onShowDrawer} activeOpacity={0.6}>
+          <Icon name="menu" size={24} color={theme['c-font']} />
+        </TouchableOpacity>
 
         {/* 中间：标题 / 搜索类型选择器 */}
         {headerComponents[id] ?? (
@@ -98,10 +75,8 @@ const Header = () => {
           </View>
         )}
 
-        {/* 右侧：占位，保持对称 */}
-        <View style={styles.rightSection}>
-          {/* 预留：后续可加通知、更多菜单等 */}
-        </View>
+        {/* 右侧：占位 */}
+        <View style={styles.rightSection} />
       </View>
     </>
   )
