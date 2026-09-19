@@ -352,6 +352,86 @@ declare global {
       'download.fileName': '歌名 - 歌手' | '歌手 - 歌名' | '歌名'
 
       /**
+       * 是否启用下载
+       */
+      'download.enable': boolean
+
+      /**
+       * 下载保存路径（空字符串表示使用默认路径）
+       */
+      'download.savePath': string
+
+      /**
+       * 下载的文件名是否按歌单名分组
+       */
+      'download.isSavePathGroupByListName': boolean
+
+      /**
+       * 最大同时下载数
+       */
+      'download.maxDownloadNum': number
+
+      /**
+       * 文件已存在时跳过
+       */
+      'download.skipExistFile': boolean
+
+      /**
+       * 是否下载歌词文件
+       */
+      'download.isDownloadLrc': boolean
+
+      /**
+       * 是否下载逐字歌词
+       */
+      'download.isDownloadLxLrc': boolean
+
+      /**
+       * 是否下载翻译歌词
+       */
+      'download.isDownloadTLrc': boolean
+
+      /**
+       * 是否下载音译歌词
+       */
+      'download.isDownloadRLrc': boolean
+
+      /**
+       * 歌词文件编码
+       */
+      'download.lrcFormat': 'utf8' | 'gbk'
+
+      /**
+       * 是否嵌入封面到音频文件
+       */
+      'download.isEmbedPic': boolean
+
+      /**
+       * 是否嵌入歌词到音频文件
+       */
+      'download.isEmbedLyric': boolean
+
+      /**
+       * 是否嵌入逐字歌词
+       */
+      'download.isEmbedLyricLx': boolean
+
+      /**
+       * 是否嵌入翻译歌词
+       */
+      'download.isEmbedLyricT': boolean
+
+      /**
+       * 是否嵌入音译歌词
+       */
+      'download.isEmbedLyricR': boolean
+
+      /**
+       * 是否使用其他音源下载
+       */
+      'download.isUseOtherSource': boolean
+
+      /**
        * 是否启用同步
        */
       'sync.enable': boolean

@@ -1,29 +1,43 @@
 import { memo } from 'react'
-import { View, TouchableOpacity } from 'react-native'
+import { View, TouchableOpacity, StyleSheet } from 'react-native'
 
-import Section from '../components/Section'
-// import Button from './components/Button'
-
+import { Icon } from '@/components/common/Icon'
 import { createStyle, openUrl } from '@/utils/tools'
-// import { showPactModal } from '@/navigation'
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
 import Text from '@/components/common/Text'
 import { showPactModal } from '@/core/common'
+import { showModal as showVersionModal } from '@/core/version'
 
-// const qqGroupUrl = 'mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26jump_from%3Dwebapi%26k%3Du1zyxek8roQAwic44nOkBXtG9CfbAxFw'
-// const qqGroupUrl2 = 'mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26jump_from%3Dwebapi%26k%3D-l4kNZ2bPQAuvfCQFFhl1UoibvF5wcrQ'
-// const qqGroupWebUrl = 'https://qm.qq.com/cgi-bin/qm/qr?k=jRZkyFSZ4FmUuTHA3P_RAXbbUO_Rrn5e&jump_from=webapi'
-// const qqGroupWebUrl2 = 'https://qm.qq.com/cgi-bin/qm/qr?k=HPNJEfrZpBZ9T8szYWbe2d5JrAAeOt_l&jump_from=webapi'
+const currentVer = process.versions.app
+
+interface RowProps {
+  title: string
+  subtitle?: string
+  onPress?: () => void
+}
+
+const Row = memo(({ title, subtitle, onPress }: RowProps) => {
+  const theme = useTheme()
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={styles.row}>
+      <View style={styles.rowTextWrap}>
+        <Text size={16} color={theme['c-font']}>{title}</Text>
+        {subtitle ? (
+          <Text size={12} color={theme['c-font-label']} style={styles.rowSubtitle}>{subtitle}</Text>
+        ) : null}
+      </View>
+      <Icon name="chevron-right" size={16} color={theme['c-font-label']} />
+    </TouchableOpacity>
+  )
+})
 
 export default memo(() => {
   const theme = useTheme()
   const t = useI18n()
+
   const openHomePage = () => {
     void openUrl('https://github.com/lyswhut/lx-music-mobile#readme')
-  }
-  const openIssuePage = () => {
-    void openUrl('https://github.com/lyswhut/lx-music-mobile/issues?q=is%3Aissue+')
   }
   const openGHReleasePage = () => {
     void openUrl('https://github.com/lyswhut/lx-music-mobile/releases')
@@ -31,116 +45,115 @@ export default memo(() => {
   const openFAQPage = () => {
     void openUrl('https://lyswhut.github.io/lx-music-doc/mobile/faq')
   }
-  // const openIssuesPage = () => {
-  //   openUrl('https://github.com/lyswhut/lx-music-mobile/issues')
-  // }
   const openPactModal = () => {
     showPactModal()
   }
   const openPartPage = () => {
     void openUrl('https://github.com/lyswhut/lx-music-mobile#%E9%A1%B9%E7%9B%AE%E5%8D%8F%E8%AE%AE')
   }
-
-  // const goToQQGroup = () => {
-  //   openUrl(qqGroupUrl).catch(() => {
-  //     void openUrl(qqGroupWebUrl)
-  //   })
-  // }
-  // const goToQQGroup2 = () => {
-  //   openUrl(qqGroupUrl2).catch(() => {
-  //     void openUrl(qqGroupWebUrl2)
-  //   })
-  // }
-
-  const textLinkStyle = {
-    ...styles.text,
-    textDecorationLine: 'underline',
-    color: theme['c-primary-font'],
-    // fontSize: 14,
-  } as const
-
+  const openVersionModal = () => {
+    showVersionModal()
+  }
+  const openLicensePage = () => {
+    void openUrl('https://github.com/lyswhut/lx-music-mobile#%E5%BC%80%E6%BA%90%E5%8D%8F%E8%AE%AE')
+  }
 
   return (
-    <Section title={t('setting_about')}>
-      <View style={styles.part}>
-        <Text style={styles.text} >本软件完全免费，代码已开源。开源地址：</Text>
-        <TouchableOpacity onPress={openHomePage}>
-          <Text style={textLinkStyle}>https://github.com/lyswhut/lx-music-mobile</Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      {/* 居中图标 + 名称 + 版本 */}
+      <View style={styles.header}>
+        <View style={[styles.icon, { backgroundColor: theme['c-primary'] }]}>
+          <Text size={32} color="#fff" style={{ fontWeight: 'bold' }}>♪</Text>
+        </View>
+        <Text size={18} color={theme['c-font']} style={[styles.appName, { fontWeight: 'bold' }]}>
+          LX Music™
+        </Text>
+        <Text size={13} color={theme['c-font-label']} style={styles.appVersion}>
+          v{currentVer} Official
+        </Text>
       </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>最新版下载地址：</Text>
-        <TouchableOpacity onPress={openGHReleasePage}>
-          <Text style={textLinkStyle}>GitHub Releases</Text>
-        </TouchableOpacity>
+
+      {/* 核准号卡片 */}
+      <View style={[styles.card, { backgroundColor: theme['c-primary-alpha-900'] }]}>
+        <Row title="App 核准号" subtitle="无" onPress={openFAQPage} />
       </View>
-      <View style={styles.part}>
-        <Text style={styles.text} >软件的常见问题可转至：</Text>
-        <TouchableOpacity onPress={openFAQPage}>
-          <Text style={textLinkStyle}>移动版常见问题</Text>
-        </TouchableOpacity>
+
+      {/* 链接卡片组 */}
+      <View style={[styles.card, { backgroundColor: theme['c-primary-alpha-900'] }]}>
+        <Row title="制作人员" onPress={openHomePage} />
+        <View style={[styles.divider, { backgroundColor: theme['c-border-background'] }]} />
+        <Row title="更新日志" onPress={openVersionModal} />
+        <View style={[styles.divider, { backgroundColor: theme['c-border-background'] }]} />
+        <Row title="软件使用条款" onPress={openPactModal} />
+        <View style={[styles.divider, { backgroundColor: theme['c-border-background'] }]} />
+        <Row title="隐私协议" onPress={openPartPage} />
+        <View style={[styles.divider, { backgroundColor: theme['c-border-background'] }]} />
+        <Row title="开放源代码许可" onPress={openLicensePage} />
       </View>
-      <View style={styles.part}>
-        <Text style={styles.text}><Text style={styles.boldText}>本软件没有客服</Text>，但我们整理了一些常见的使用问题。<Text style={styles.boldText} >仔细、仔细、仔细</Text>地阅读常见问题后，</Text>
-        <Text style={styles.text}>仍有问题可到 GitHub </Text>
-        <TouchableOpacity onPress={openIssuePage}>
-          <Text style={textLinkStyle}>提交 Issue</Text>
-        </TouchableOpacity>
-        <Text style={styles.text}>。</Text>
+
+      {/* 版本信息卡片 */}
+      <View style={[styles.card, { backgroundColor: theme['c-primary-alpha-900'] }]}>
+        <Row title="当前版本" subtitle={`v${currentVer}`} onPress={openVersionModal} />
+        <View style={[styles.divider, { backgroundColor: theme['c-border-background'] }]} />
+        <Row title="GitHub Releases" onPress={openGHReleasePage} />
+        <View style={[styles.divider, { backgroundColor: theme['c-border-background'] }]} />
+        <Row title="常见问题" onPress={openFAQPage} />
       </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>由于软件开发的初衷仅是为了对新技术的学习与研究，因此软件直至停止维护都将会一直保持纯净。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>目前本项目的原始发布地址<Text style={styles.boldText}>只有 GitHub</Text>，其他渠道均为第三方转载发布，可信度请自行鉴别。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}><Text style={styles.boldText}>本项目没有微信公众号之类的所谓「官方账号」，也未在小米、华为、vivo 等应用商店发布同名应用，谨防被骗！</Text></Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>若你使用过程中遇到<Text style={styles.boldText}>广告</Text>或者<Text style={styles.boldText}>引流</Text>（如需要加群、关注公众号之类才能使用或者升级）的信息，则表明你当前运行的软件是「第三方修改版」。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>若在升级新版本时提示「<Text style={styles.boldText}>签名不一致</Text>」，则表明你手机上的旧版本或者将要安装的新版本中<Text style={styles.boldText}>有一方</Text>是「<Text style={styles.boldText}>第三方修改版</Text>」。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>你已签署本软件的</Text>
-        <TouchableOpacity onPress={openPactModal}><Text style={styles.text} color={theme['c-primary-font']}>许可协议</Text></TouchableOpacity>
-        <Text style={styles.text}>，协议的在线版本在</Text>
-        <TouchableOpacity onPress={openPartPage}><Text style={textLinkStyle}>这里</Text></TouchableOpacity>
-        <Text style={styles.text}>。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>By: </Text>
-        <Text style={styles.text}>落雪无痕</Text>
-      </View>
-    </Section>
+    </View>
   )
 })
 
 const styles = createStyle({
-  part: {
-    marginLeft: 15,
-    marginRight: 15,
-    marginBottom: 10,
+  container: {
+    paddingLeft: 15,
+    paddingRight: 15,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  header: {
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingBottom: 28,
+  },
+  icon: {
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  appName: {
+    marginBottom: 4,
+  },
+  appVersion: {
+    opacity: 0.7,
+  },
+  card: {
+    borderRadius: 16,
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
+  row: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 16,
+    paddingRight: 14,
+    paddingTop: 14,
+    paddingBottom: 14,
+    minHeight: 52,
   },
-  text: {
-    fontSize: 14,
-    textAlignVertical: 'bottom',
+  rowTextWrap: {
+    flex: 1,
+    paddingRight: 12,
   },
-  boldText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    textAlignVertical: 'bottom',
+  rowSubtitle: {
+    marginTop: 2,
+    opacity: 0.6,
   },
-  throughText: {
-    fontSize: 14,
-    textDecorationLine: 'line-through',
-    textAlignVertical: 'bottom',
-  },
-  btn: {
-    flexDirection: 'row',
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 16,
   },
 })
