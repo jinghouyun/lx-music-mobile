@@ -242,36 +242,40 @@ export default async(setting: LX.AppSetting) => {
     console.log('Checking built-in sources...')
     const { importUserApi } = await import('@/core/userApi')
 
-    // 所有内置音源
-    const sources = [
-      require('@/resources/user-api/listen1.js'),
-      require('@/resources/user-api/flower.js'),
-      require('@/resources/user-api/grass.js'),
-      require('@/resources/user-api/ikun.js'),
-      require('@/resources/user-api/sixyin.js'),
+    // 所有内置音源文件名
+    const sourceFiles = [
+      'listen1.js',
+      'flower.js',
+      'grass.js',
+      'ikun.js',
+      'sixyin.js',
     ]
 
     // 已有音源的名称列表
     const existingNames = new Set((await getUserApiList()).map(api => api.name))
 
     let importedCount = 0
-    for (const source of sources) {
-      // 从脚本头部提取 @name
-      const nameMatch = source.match(/@name\s+(.+?)(\n|$)/)
-      const sourceName = nameMatch ? nameMatch[1].trim() : 'unknown'
-
-      if (existingNames.has(sourceName)) {
-        console.log('Source already exists, skip:', sourceName)
-        continue
-      }
-
+    for (const fileName of sourceFiles) {
       try {
+        // 从 android assets 读取音源脚本
+        const res = await fetch(`file:///android_asset/script/user-api/${fileName}`)
+        const source = await res.text()
+
+        // 从脚本头部提取 @name
+        const nameMatch = source.match(/@name\s+(.+?)(\n|$)/)
+        const sourceName = nameMatch ? nameMatch[1].trim() : fileName
+
+        if (existingNames.has(sourceName)) {
+          console.log('Source already exists, skip:', sourceName)
+          continue
+        }
+
         await importUserApi(source)
         existingNames.add(sourceName)
         importedCount++
         console.log('Imported built-in source:', sourceName)
       } catch (err) {
-        console.log('Failed to import source:', sourceName, err)
+        console.log('Failed to import source:', fileName, err)
       }
     }
 
