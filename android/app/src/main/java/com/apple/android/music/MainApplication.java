@@ -15,7 +15,6 @@ import com.apple.android.music.crypto.CryptoPackage;
 import com.apple.android.music.lyric.LyricPackage;
 import com.apple.android.music.userApi.UserApiPackage;
 import com.apple.android.music.utils.UtilsPackage;
-import com.apple.android.music.vivo.VivoListPackage;
 import com.apple.android.music.vocalsep.VocalSeparatorPackage;
 
 public class MainApplication extends NavigationApplication {
@@ -38,7 +37,6 @@ public class MainApplication extends NavigationApplication {
           packages.add(new UtilsPackage());
           packages.add(new CryptoPackage());
           packages.add(new UserApiPackage());
-          packages.add(new VivoListPackage());
           packages.add(new VocalSeparatorPackage());
           return packages;
         }
