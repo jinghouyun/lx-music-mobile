@@ -242,28 +242,24 @@ export default async(setting: LX.AppSetting) => {
     console.log('Checking built-in sources...')
     const { importUserApi } = await import('@/core/userApi')
 
-    // 所有内置音源文件名
-    const sourceFiles = [
-      'listen1.js',
-      'flower.js',
-      'grass.js',
-      'ikun.js',
-      'sixyin.js',
+    // 所有内置音源（JSON 包装，避免 Metro 执行 JS）
+    const sources = [
+      require('@/resources/user-api/listen1.json').script,
+      require('@/resources/user-api/flower.json').script,
+      require('@/resources/user-api/grass.json').script,
+      require('@/resources/user-api/ikun.json').script,
+      require('@/resources/user-api/sixyin.json').script,
     ]
 
     // 已有音源的名称列表
     const existingNames = new Set((await getUserApiList()).map(api => api.name))
 
     let importedCount = 0
-    for (const fileName of sourceFiles) {
+    for (const source of sources) {
       try {
-        // 从 android assets 读取音源脚本
-        const res = await fetch(`file:///android_asset/script/user-api/${fileName}`)
-        const source = await res.text()
-
         // 从脚本头部提取 @name
         const nameMatch = source.match(/@name\s+(.+?)(\n|$)/)
-        const sourceName = nameMatch ? nameMatch[1].trim() : fileName
+        const sourceName = nameMatch ? nameMatch[1].trim() : 'unknown'
 
         if (existingNames.has(sourceName)) {
           console.log('Source already exists, skip:', sourceName)
@@ -275,7 +271,7 @@ export default async(setting: LX.AppSetting) => {
         importedCount++
         console.log('Imported built-in source:', sourceName)
       } catch (err) {
-        console.log('Failed to import source:', fileName, err)
+        console.log('Failed to import source:', err)
       }
     }
 
