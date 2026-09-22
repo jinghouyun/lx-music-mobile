@@ -84,6 +84,13 @@ let inited = false
  */
 let currentSongId: string | null = null
 
+/**
+ * 所有正在分离/排队中的歌曲 id（含切歌后转入后台继续跑的）。
+ * 与 state.task（只跟踪当前歌曲）不同：这个集合是全局的，
+ * 切回一首"正在后台分离"的歌时能正确判断，避免重复发起下载+分离。
+ */
+const activeSongIds = new Set<string>()
+
 const sanitizeId = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_')
 
 /**
@@ -252,6 +259,18 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
   // 该任务是否仍属于"当前正在播放的歌"。切歌后旧任务转为后台任务（原生继续跑完落盘），
   // 此时它的进度/完成/失败都不应再动当前歌曲的面板 UI。
   const isForCurrent = () => currentSongId === song.id
+
+  // 已在后台分离/排队中（含切歌转后台的旧歌）：不重复下载+分离，
+  // 只把"正在后台处理"状态回灌到当前面板，避免用户切回来看到"需要重新分离"。
+  if (activeSongIds.has(song.id)) {
+    console.log('VocalSep: song already active (background), skip duplicate:', song.id)
+    if (isForCurrent()) {
+      setTask({ status: 'queued', progress: 0, songId: song.id, message: '正在后台分离中…' })
+    }
+    return
+  }
+
+  activeSongIds.add(song.id)
   if (isForCurrent()) {
     setTask({ status: 'downloading', progress: 0, songId: song.id, message: '准备中…' })
   }
@@ -316,16 +335,16 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       }
       toast(`人声分离失败：${e?.message ?? '未知错误'}`)
     }
+  } finally {
+    // 任务结束（完成/失败/取消）后移出活跃集合，下次切回可正常重新发起
+    activeSongIds.delete(song.id)
   }
 }
 
-/** 是否有针对指定歌曲（或任意歌曲）的分离任务正在进行（含排队等待） */
+/** 是否有针对指定歌曲（或任意歌曲）的分离任务正在进行（含排队等待、含后台任务） */
 const isTaskBusy = (songId?: string) => {
-  const busy = state.task.status === 'downloading' ||
-    state.task.status === 'queued' ||
-    state.task.status === 'decoding' ||
-    state.task.status === 'inferring'
-  return busy && (songId == null || state.task.songId === songId)
+  if (songId == null) return activeSongIds.size > 0
+  return activeSongIds.has(songId)
 }
 
 // ---------------- 对外操作 ----------------

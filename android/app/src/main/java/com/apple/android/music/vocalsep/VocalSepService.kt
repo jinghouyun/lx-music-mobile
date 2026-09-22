@@ -47,8 +47,8 @@ class VocalSepService : Service() {
     private const val CHANNEL_ID = "vocal_sep"
     private const val NOTIF_ID = 4721
 
-    /** 待执行任务队列上限（不含正在执行的 1 个） */
-    private const val MAX_QUEUE = 3
+    /** 待执行任务队列上限（不含正在执行的 1 个）。连播时旧歌在后台继续分离，队列要足够大，避免把排队中的旧歌挤出 */
+    private const val MAX_QUEUE = 10
 
     /** 队列空转多久后自动停止前台服务（覆盖慢网络下 JS 下载模型/音频→入队之间的间隙） */
     private const val IDLE_STOP_DELAY_MS = 5 * 60_000L
