@@ -54,6 +54,12 @@ class VocalSeparatorModule(
       ?.emit("VocalSepProgress", params)
   }
 
+  private fun emitExport(params: WritableMap) {
+    reactContext
+      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+      ?.emit("VocalSepExportProgress", params)
+  }
+
   private fun progress(songId: String, status: String, fraction: Double, message: String?) {
     val m = Arguments.createMap()
     m.putString("songId", songId)
@@ -235,6 +241,9 @@ class VocalSeparatorModule(
   /**
    * 把所有人声分离缓存（每首歌的 vocals.wav + accompaniment.wav）打包成 zip。
    *
+   * 后台线程执行，压缩期间通过 "VocalSepExportProgress" 事件持续上报进度，
+   * 避免大缓存导出时长时间无反馈。
+   *
    * @param targetDirPath 目标目录（用户在 ChoosePath 里选的文件夹）
    * @param fileName      不含 .zip 后缀的文件名，如 "vocal_sep_cache"
    * 返回 { path, songCount, totalBytes }
@@ -265,33 +274,71 @@ class VocalSeparatorModule(
         i++
       }
 
+      // 收集所有待打包文件并计算总字节（用于进度）
+      val fileList = mutableListOf<Pair<String, File>>()
       var totalBytes = 0L
-      ZipOutputStream(FileOutputStream(finalFile)).use { zos ->
-        val buf = ByteArray(8192)
-        for (songDir in songs) {
-          val songId = songDir.name
-          for (stem in arrayOf("vocals.wav", "accompaniment.wav")) {
-            val f = File(songDir, stem)
-            if (!f.exists()) continue
+      for (songDir in songs) {
+        val songId = songDir.name
+        for (stem in arrayOf("vocals.wav", "accompaniment.wav")) {
+          val f = File(songDir, stem)
+          if (f.exists()) {
             totalBytes += f.length()
-            val entry = ZipEntry("$songId/$stem")
-            zos.putNextEntry(entry)
-            FileInputStream(f).use { fis ->
-              var len: Int
-              while (fis.read(buf).also { len = it } > 0) {
-                zos.write(buf, 0, len)
-              }
-            }
-            zos.closeEntry()
+            fileList.add(Pair(songId, f))
           }
         }
       }
 
-      val m = Arguments.createMap()
-      m.putString("path", finalFile.absolutePath)
-      m.putInt("songCount", songs.size)
-      m.putDouble("totalBytes", totalBytes.toDouble())
-      promise.resolve(m)
+      // 后台线程压缩：不阻塞 RN 模块线程，事件持续上报进度
+      Thread {
+        var written = 0L
+        var lastEmitMs = 0L
+        var lastEmitPct = -1
+        try {
+          ZipOutputStream(FileOutputStream(finalFile)).use { zos ->
+            val buf = ByteArray(8192)
+            for ((songId, f) in fileList) {
+              val entry = ZipEntry("$songId/${f.name}")
+              zos.putNextEntry(entry)
+              FileInputStream(f).use { fis ->
+                var len: Int
+                while (fis.read(buf).also { len = it } > 0) {
+                  zos.write(buf, 0, len)
+                  written += len
+                  // 节流：每 200ms 或进度跨过 5% 才发一次事件，避免事件洪水
+                  val now = System.currentTimeMillis()
+                  val pct = (written * 100 / totalBytes).toInt()
+                  if (now - lastEmitMs >= 200 || pct - lastEmitPct >= 5) {
+                    lastEmitMs = now
+                    lastEmitPct = pct
+                    val m = Arguments.createMap()
+                    m.putDouble("written", written.toDouble())
+                    m.putDouble("total", totalBytes.toDouble())
+                    m.putDouble("progress", if (totalBytes > 0) written.toDouble() / totalBytes else 0.0)
+                    m.putString("currentFile", "$songId/${f.name}")
+                    emitExport(m)
+                  }
+                }
+              }
+              zos.closeEntry()
+            }
+          }
+
+          val m = Arguments.createMap()
+          m.putString("path", finalFile.absolutePath)
+          m.putInt("songCount", songs.size)
+          m.putDouble("totalBytes", totalBytes.toDouble())
+          // 收尾：置 100%
+          val done = Arguments.createMap()
+          done.putDouble("written", totalBytes.toDouble())
+          done.putDouble("total", totalBytes.toDouble())
+          done.putDouble("progress", 1.0)
+          done.putString("currentFile", "")
+          emitExport(done)
+          promise.resolve(m)
+        } catch (e: Throwable) {
+          promise.reject("E_EXPORT", "导出失败: ${e.message}", e)
+        }
+      }.start()
     } catch (e: Throwable) {
       promise.reject("E_EXPORT", "导出失败: ${e.message}", e)
     }

@@ -11,6 +11,18 @@ export interface VocalSepProgressEvent {
   message?: string
 }
 
+/** 导出缓存 zip 的进度事件 */
+export interface VocalSepExportProgressEvent {
+  /** 已写入字节数 */
+  written: number
+  /** 总字节数 */
+  total: number
+  /** 0 ~ 1 */
+  progress: number
+  /** 当前正在打包的文件，如 "songId/vocals.wav"；收尾为空串 */
+  currentFile: string
+}
+
 export interface StemPaths {
   vocals: string
   accompaniment: string
@@ -146,5 +158,10 @@ export const vocalSeparator = {
 
   addProgressListener(listener: ProgressListener) {
     return emitter.addListener('VocalSepProgress', listener)
+  },
+
+  /** 监听导出缓存 zip 的进度（压缩在后台线程，事件节流上报） */
+  addExportProgressListener(listener: (e: VocalSepExportProgressEvent) => void) {
+    return emitter.addListener('VocalSepExportProgress', listener)
   },
 }
