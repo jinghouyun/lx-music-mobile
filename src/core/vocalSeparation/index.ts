@@ -91,6 +91,66 @@ let currentSongId: string | null = null
  */
 const activeSongIds = new Set<string>()
 
+// ---------------- 全局分离任务列表（设置页展示用） ----------------
+
+export interface SepTaskListItem {
+  songId: string
+  /** 歌曲名（尽力解析；解析不到用 id 展示） */
+  name: string
+  singer?: string
+  status: SepTaskState['status']
+  progress: number
+  message?: string
+  /** 任务开始时间戳，用于列表排序（新任务在前） */
+  createdAt: number
+}
+
+const taskList = new Map<string, SepTaskListItem>()
+type TaskListListener = (list: SepTaskListItem[]) => void
+const taskListListeners = new Set<TaskListListener>()
+const emitTaskList = () => {
+  const list = [...taskList.values()].sort((a, b) => b.createdAt - a.createdAt)
+  taskListListeners.forEach(l => l(list))
+}
+/** 订阅全局分离任务列表变化（设置页人声分离列表用），立即回调一次当前快照 */
+export const addSepTaskListListener = (cb: TaskListListener) => {
+  taskListListeners.add(cb)
+  cb([...taskList.values()].sort((a, b) => b.createdAt - a.createdAt))
+  return () => { taskListListeners.delete(cb) }
+}
+/** 获取当前分离任务列表快照（含后台歌曲） */
+export const getSepTaskList = (): SepTaskListItem[] =>
+  [...taskList.values()].sort((a, b) => b.createdAt - a.createdAt)
+
+const upsertTask = (songId: string, patch: Partial<SepTaskListItem>) => {
+  const old = taskList.get(songId)
+  if (old) {
+    taskList.set(songId, { ...old, ...patch })
+  } else {
+    taskList.set(songId, {
+      songId,
+      name: patch.name ?? songId,
+      status: patch.status ?? 'downloading',
+      progress: patch.progress ?? 0,
+      createdAt: Date.now(),
+      ...patch,
+    })
+  }
+  emitTaskList()
+}
+const removeTask = (songId: string) => {
+  if (taskList.delete(songId)) emitTaskList()
+}
+
+/** 从歌曲对象解析展示名（与 buildSongFileName 一致的口径） */
+const taskNameOf = (mi: LX.Music.MusicInfo | LX.Download.ListItem | null): { name: string, singer?: string } => {
+  const info: any = mi ? ('musicInfo' in (mi as any) ? (mi as any).musicInfo : mi) : null
+  return {
+    name: info?.name ?? '未知歌曲',
+    singer: info?.singer || undefined,
+  }
+}
+
 const sanitizeId = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_')
 
 /**
@@ -259,6 +319,7 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
   // 该任务是否仍属于"当前正在播放的歌"。切歌后旧任务转为后台任务（原生继续跑完落盘），
   // 此时它的进度/完成/失败都不应再动当前歌曲的面板 UI。
   const isForCurrent = () => currentSongId === song.id
+  const { name, singer } = taskNameOf(song.musicInfo)
 
   // 已在后台分离/排队中（含切歌转后台的旧歌）：不重复下载+分离，
   // 只把"正在后台处理"状态回灌到当前面板，避免用户切回来看到"需要重新分离"。
@@ -271,6 +332,8 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
   }
 
   activeSongIds.add(song.id)
+  // 全局任务列表：开始即登记（含后台歌曲），供设置页"人声分离列表"展示
+  upsertTask(song.id, { name, singer, status: 'downloading', progress: 0, message: '准备中…' })
   if (isForCurrent()) {
     setTask({ status: 'downloading', progress: 0, songId: song.id, message: '准备中…' })
   }
@@ -290,6 +353,15 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       onProgress: (progress, stage, message) => {
         // 排队事件发生在入队后，标记一下（原生生命周期，与是否当前歌曲无关）
         if (stage === 'queued' || stage === 'decoding' || stage === 'inferring') enqueued = true
+        // 全局任务列表：后台歌曲也更新进度（设置页可见，不回灌当前面板）
+        upsertTask(song.id, {
+          status: stage === 'downloading-model' || stage === 'downloading-audio'
+            ? 'downloading'
+            : stage === 'queued' ? 'queued'
+            : stage === 'decoding' ? 'decoding' : 'inferring',
+          progress: stage === 'queued' ? 0 : progress,
+          message,
+        })
         // 仅当前歌曲的进度才回灌面板；后台其它歌曲静默分离、落盘缓存即可
         if (!isForCurrent()) return
         setTask({
@@ -304,6 +376,8 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       },
     })
     enqueued = true
+    // 完成：任务列表保留为"已完成"（从缓存信息里能看到已分离首数）
+    upsertTask(song.id, { status: 'done', progress: 1, message: '分离完成' })
     if (isForCurrent()) {
       setTask({ status: 'done', progress: 1, songId: song.id })
     }
@@ -316,12 +390,14 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
   } catch (e: any) {
     // 切歌/切回原唱触发的取消、或队列超员丢弃：非异常，不弹提示
     if (e instanceof SeparationCancelledError) {
+      removeTask(song.id)
       if (state.task.songId === song.id) setTask({ status: 'idle', progress: 0 })
       return
     }
     // 下载阶段就失败：Service 只有 warmup 保活、没有实际任务，立即关闭通知，
     // 否则前台通知会一直挂到 60s 超时
     if (!enqueued) cancelSeparation()
+    upsertTask(song.id, { status: 'error', progress: 0, message: e?.message ?? '分离失败' })
     if (state.task.songId === song.id) {
       setTask({ status: 'error', progress: 0, songId: song.id, message: e?.message ?? '分离失败' })
     }
