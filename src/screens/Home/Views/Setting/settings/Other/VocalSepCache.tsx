@@ -27,7 +27,11 @@ const isActiveStatus = (s: SepTaskListItem['status']) =>
 
 const statusLabel = (item: SepTaskListItem): string => {
   switch (item.status) {
-    case 'downloading': return `下载中 ${Math.round(item.progress * 100)}%`
+    case 'downloading': {
+      // message 里带"正在下载模型/获取音频… X%"，优先用它；否则兜底显示下载百分比
+      if (item.message && /^(正在下载模型|正在获取音频)/.test(item.message)) return item.message
+      return `下载中 ${Math.round(item.progress * 100)}%`
+    }
     case 'queued': return '排队中'
     case 'decoding': return '解码中'
     case 'inferring': return `分离中 ${Math.round(item.progress * 100)}%`

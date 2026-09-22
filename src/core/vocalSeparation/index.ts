@@ -353,14 +353,29 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
       onProgress: (progress, stage, message) => {
         // 排队事件发生在入队后，标记一下（原生生命周期，与是否当前歌曲无关）
         if (stage === 'queued' || stage === 'decoding' || stage === 'inferring') enqueued = true
+
+        // 各阶段独立进度：separateSong 上报的是"整体 0~1"（模型 30%+音频 10%+解码+分离 50%），
+        // 这里换算回各阶段自身的 0~1，避免 UI 显示"下载中 15%"这种混算值。
+        const stageProgress = (() => {
+          switch (stage) {
+            case 'downloading-model': return Math.min(1, Math.max(0, progress / 0.3))      // 0~0.3 → 0~1
+            case 'downloading-audio': return Math.min(1, Math.max(0, (progress - 0.3) / 0.1)) // 0.3~0.4 → 0~1
+            case 'inferring': return Math.min(1, Math.max(0, (progress - 0.5) / 0.5))        // 0.5~1 → 0~1
+            case 'decoding': return 0
+            default: return progress
+          }
+        })()
+
         // 全局任务列表：后台歌曲也更新进度（设置页可见，不回灌当前面板）
         upsertTask(song.id, {
           status: stage === 'downloading-model' || stage === 'downloading-audio'
             ? 'downloading'
             : stage === 'queued' ? 'queued'
             : stage === 'decoding' ? 'decoding' : 'inferring',
-          progress: stage === 'queued' ? 0 : progress,
-          message,
+          progress: stage === 'queued' ? 0 : stageProgress,
+          message: stage === 'downloading-model' ? `正在下载模型… ${Math.round(stageProgress * 100)}%`
+            : stage === 'downloading-audio' ? `正在获取音频… ${Math.round(stageProgress * 100)}%`
+            : message,
         })
         // 仅当前歌曲的进度才回灌面板；后台其它歌曲静默分离、落盘缓存即可
         if (!isForCurrent()) return
@@ -369,8 +384,10 @@ const startSeparation = async(song: { id: string, url: string, musicInfo: LX.Mus
             ? 'downloading'
             : stage === 'queued' ? 'queued'
             : stage === 'decoding' ? 'decoding' : 'inferring',
-          progress: stage === 'queued' ? 0 : progress,
-          message,
+          progress: stage === 'queued' ? 0 : stageProgress,
+          message: stage === 'downloading-model' ? `正在下载模型… ${Math.round(stageProgress * 100)}%`
+            : stage === 'downloading-audio' ? `正在获取音频… ${Math.round(stageProgress * 100)}%`
+            : message,
           songId: song.id,
         })
       },
