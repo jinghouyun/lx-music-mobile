@@ -10,6 +10,7 @@ import {
   // Setting,
 } from '@/screens'
 import { Provider } from '@/store/Provider'
+import GlobalErrorModal from '@/components/common/GlobalErrorModal'
 
 import {
   HOME_SCREEN,
@@ -32,6 +33,8 @@ function WrappedComponent(Component: any) {
         <Component
           {...props}
         />
+        {/* 全局错误弹窗：JS 致命异常时显示错误位置+堆栈，支持一键复制反馈 */}
+        <GlobalErrorModal />
       </Provider>
     )
 

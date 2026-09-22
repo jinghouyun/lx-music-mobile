@@ -4,6 +4,45 @@ import { setJSExceptionHandler, setNativeExceptionHandler } from 'react-native-e
 import { log } from '@/utils/log'
 import { toast } from './tools'
 
+export interface GlobalErrorInfo {
+  name: string
+  message: string
+  stack?: string
+}
+
+// ---------------- 全局错误弹窗事件 ----------------
+// GlobalErrorModal（挂在所有屏幕根节点）订阅此事件来展示错误详情。
+// 崩溃可能发生在根组件挂载之前，因此保留 pendingError 兜底：组件挂载时
+// 通过 consumePendingError 取走尚未展示的错误。
+type ErrorListener = (info: GlobalErrorInfo) => void
+const errorListeners = new Set<ErrorListener>()
+let pendingError: GlobalErrorInfo | null = null
+
+export const addGlobalErrorListener = (cb: ErrorListener) => {
+  errorListeners.add(cb)
+  return () => { errorListeners.delete(cb) }
+}
+
+export const consumePendingError = (): GlobalErrorInfo | null => {
+  const e = pendingError
+  pendingError = null
+  return e
+}
+
+const emitGlobalError = (info: GlobalErrorInfo) => {
+  pendingError = info
+  if (errorListeners.size === 0) {
+    // 全局弹窗组件尚未挂载（启动早期崩溃）：退回系统 Alert，保证用户能看到错误
+    Alert.alert(
+      '💥Unexpected error occurred💥',
+      `应用出 bug 了😭\n\nError:\nFatal: ${info.name} ${info.message}`,
+      [{ text: '关闭 (Close)' }],
+    )
+    return
+  }
+  errorListeners.forEach(l => l(info))
+}
+
 const errorHandler = (e: Error, isFatal: boolean) => {
   const excludedErrors = [
     'Failed to construct \'Response\'',
@@ -12,21 +51,11 @@ const errorHandler = (e: Error, isFatal: boolean) => {
     if (excludedErrors.some((excludedError) => e.message.includes(excludedError))) {
       toast('应用遇到了错误，如果你有固定的复现方式，请截图并在 GitHub 反馈（并附上具体的操作步骤，以及“设置-错误日志”的内容）')
     } else {
-      Alert.alert(
-        '💥Unexpected error occurred💥',
-        `
-  应用出 bug 了😭，以下是错误异常信息。请截图并在 GitHub 反馈（并附上刚才你进行了什么操作，以及附上“设置-错误日志”的内容）。现在应用可能会出现异常，若出现异常请尝试强制结束应用后重新启动！
-
-  Error:
-  ${isFatal ? 'Fatal:' : ''} ${e.name} ${e.message}
-  `,
-        [{
-          text: '关闭 (Close)',
-          onPress: () => {
-            // exitApp()
-          },
-        }],
-      )
+      emitGlobalError({
+        name: e.name,
+        message: e.message,
+        stack: e.stack,
+      })
     }
   }
   log.error(e.stack)
