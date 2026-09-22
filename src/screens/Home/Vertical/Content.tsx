@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import DrawerLayoutFixed from '@/components/common/DrawerLayoutFixed'
+import { COMPONENT_IDS } from '@/config/constant'
 import Header from './Header'
 import DrawerNav from './DrawerNav'
 import Main from './Main'
@@ -17,6 +18,7 @@ const Content = () => {
   return (
     <DrawerLayoutFixed
       ref={drawerRef}
+      visibleNavNames={[COMPONENT_IDS.home]}
       drawerWidth={280}
       drawerPosition="left"
       drawerBackgroundColor="rgba(0,0,0,0)"

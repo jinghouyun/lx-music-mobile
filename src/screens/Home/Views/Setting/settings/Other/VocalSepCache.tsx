@@ -66,11 +66,11 @@ const TaskItem = ({ item }: { item: SepTaskListItem }) => {
   const pct = Math.max(active ? 2 : 0, Math.round(item.progress * 100))
 
   return (
-    <View style={[styles.taskCard, { backgroundColor: theme['c-content-background'], borderColor: theme['c-border-color'] }]}>
+    <View style={[styles.taskCard, { backgroundColor: theme['c-content-background'], borderColor: theme['c-border-background'] }]}>
       {/* 信息行 */}
       <View style={styles.taskInfoRow}>
         <View style={styles.taskTextWrap}>
-          <Text size={14} color={theme['c-font']} bold numberOfLines={1}>
+          <Text size={14} color={theme['c-font']} style={styles.boldText} numberOfLines={1}>
             {item.name}
           </Text>
           {item.singer ? (
@@ -80,7 +80,7 @@ const TaskItem = ({ item }: { item: SepTaskListItem }) => {
           ) : null}
         </View>
         <View style={[styles.statusPill, { backgroundColor: colorBg(color) }]}>
-          <Text size={11} color={color} bold>
+          <Text size={11} color={color} style={styles.boldText}>
             {statusLabel(item)}
           </Text>
         </View>
@@ -260,13 +260,13 @@ export default memo(() => {
 
       {/* 人声分离列表 */}
       <View style={styles.listHeader}>
-        <Text size={14} color={theme['c-font']} bold>
+        <Text size={14} color={theme['c-font']} style={styles.boldText}>
           人声分离列表
         </Text>
         {activeCount > 0 ? (
           <View style={[styles.liveBadge, { backgroundColor: theme['c-primary'] }]}>
             <View style={styles.liveDot} />
-            <Text size={10} color="#fff" bold>
+            <Text size={10} color="#fff" style={styles.boldText}>
               {activeCount} 个进行中
             </Text>
           </View>
@@ -287,7 +287,7 @@ export default memo(() => {
               onPress={() => setTaskFilter(f.key)}
               activeOpacity={0.7}
             >
-              <Text size={13} color={active ? theme['c-primary'] : theme['c-font-label']} bold={active}>
+              <Text size={13} color={active ? theme['c-primary'] : theme['c-font-label']} style={active ? styles.boldText : undefined}>
                 {f.label}
               </Text>
               <View style={[styles.filterCount, { backgroundColor: active ? theme['c-primary'] : theme['c-primary-light-100'] }]}>
@@ -302,7 +302,7 @@ export default memo(() => {
 
       {/* 列表 */}
       {shownList.length === 0 ? (
-        <View style={[styles.emptyWrap, { backgroundColor: theme['c-content-background'], borderColor: theme['c-border-color'] }]}>
+        <View style={[styles.emptyWrap, { backgroundColor: theme['c-content-background'], borderColor: theme['c-border-background'] }]}>
           <Text size={13} color={theme['c-font-label']}>
             {taskList.length === 0 ? '暂无分离任务，播放歌曲并开启人声分离后显示' : '该分类下暂无任务'}
           </Text>
@@ -321,7 +321,7 @@ export default memo(() => {
       <Modal ref={progressModalRef} keyHide={false} bgHide={false} bgColor="rgba(0,0,0,0.55)">
         <View style={styles.modalWrap}>
           <View style={[styles.progressCard, { backgroundColor: theme['c-content-background'] }]}>
-            <Text style={styles.progressTitle} size={16} color={theme['c-font']} bold>
+            <Text style={styles.progressTitle} size={16} color={theme['c-font']}>
               正在导出缓存
             </Text>
             <Text style={styles.progressDesc} size={12} color={theme['c-font-label']}>
@@ -343,7 +343,7 @@ export default memo(() => {
             </View>
 
             <View style={styles.progressMeta}>
-              <Text size={12} color={theme['c-primary']} bold>
+              <Text size={12} color={theme['c-primary']} style={styles.boldText}>
                 {Math.round((exportProgress?.progress ?? 0) * 100)}%
               </Text>
               <Text size={11} color={theme['c-font-label']}>
@@ -471,6 +471,10 @@ const styles = StyleSheet.create({
   },
   progressTitle: {
     marginBottom: 4,
+    fontWeight: '600',
+  },
+  boldText: {
+    fontWeight: '600',
   },
   progressDesc: {
     marginBottom: 16,

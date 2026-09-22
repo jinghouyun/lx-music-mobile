@@ -5,7 +5,7 @@ import { usePageVisible } from '@/store/common/hook'
 import { type COMPONENT_IDS } from '@/config/constant'
 
 interface Props extends DrawerLayoutAndroidProps {
-  visibleNavNames: COMPONENT_IDS[]
+  visibleNavNames?: COMPONENT_IDS[]
   widthPercentage: number
   widthPercentageMax?: number
 }
@@ -16,7 +16,7 @@ export interface DrawerLayoutFixedType {
   fixWidth: () => void
 }
 
-const DrawerLayoutFixed = forwardRef<DrawerLayoutFixedType, Props>(({ visibleNavNames, widthPercentage, widthPercentageMax, children, ...props }, ref) => {
+const DrawerLayoutFixed = forwardRef<DrawerLayoutFixedType, Props>(({ visibleNavNames = [], widthPercentage, widthPercentageMax, children, ...props }, ref) => {
   const drawerLayoutRef = useRef<DrawerLayoutAndroid>(null)
   const [w, setW] = useState<number | `${number}%`>('100%')
   const [drawerWidth, setDrawerWidth] = useState(0)
