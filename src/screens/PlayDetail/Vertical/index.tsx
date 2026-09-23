@@ -11,7 +11,11 @@ import Lyric from './Lyric'
 import { screenkeepAwake, screenUnkeepAwake } from '@/utils/nativeModules/utils'
 import commonState, { type InitState as CommonState } from '@/store/common/state'
 import { createStyle } from '@/utils/tools'
+import LinearGradient from '@/components/common/LinearGradient'
 // import { useTheme } from '@/store/theme/hook'
+
+// 播放页红色渐变背景（对齐 Salt Player 风格）
+const GRADIENT_COLORS = ['#2a0a0a', '#5a1212', '#8f1c1c', '#b3261e', '#d43a2a']
 
 const LyricPage = ({ activeIndex }: { activeIndex: number }) => {
   const initedRef = useRef(false)
@@ -71,9 +75,9 @@ export default memo(({ componentId }: { componentId: string }) => {
   }, [])
 
   return (
-    <>
+    <LinearGradient colors={GRADIENT_COLORS} style={styles.container}>
       <Header />
-      <View style={styles.container}>
+      <View style={styles.content}>
         <PagerView
           onPageSelected={onPageSelected}
           // onPageScrollStateChanged={onPageScrollStateChanged}
@@ -86,13 +90,9 @@ export default memo(({ componentId }: { componentId: string }) => {
             <LyricPage activeIndex={pageIndex} />
           </View>
         </PagerView>
-        {/* <View style={styles.pageIndicator} nativeID={NAV_SHEAR_NATIVE_IDS.playDetail_pageIndicator}>
-          <View style={{ ...styles.pageIndicatorItem, backgroundColor: pageIndex == 0 ? theme['c-primary-light-100-alpha-700'] : theme['c-primary-alpha-900'] }}></View>
-          <View style={{ ...styles.pageIndicatorItem, backgroundColor: pageIndex == 1 ? theme['c-primary-light-100-alpha-700'] : theme['c-primary-alpha-900'] }}></View>
-        </View> */}
         <Player />
       </View>
-    </>
+    </LinearGradient>
   )
 })
 
@@ -101,21 +101,11 @@ const styles = createStyle({
     flex: 1,
     flexDirection: 'column',
   },
+  content: {
+    flex: 1,
+    flexDirection: 'column',
+  },
   pagerView: {
     flex: 1,
   },
-  // pageIndicator: {
-  //   flex: 0,
-  //   flexDirection: 'row',
-  //   justifyContent: 'center',
-  //   paddingTop: 10,
-  //   // backgroundColor: 'rgba(0,0,0,0.1)',
-  // },
-  // pageIndicatorItem: {
-  //   height: 3,
-  //   width: '5%',
-  //   marginLeft: 2,
-  //   marginRight: 2,
-  //   borderRadius: 2,
-  // },
 })

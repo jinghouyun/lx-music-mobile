@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import { View, TouchableOpacity } from 'react-native'
 import { useKeyboard } from '@/utils/hooks'
 
@@ -12,21 +12,19 @@ import { Icon } from '@/components/common/Icon'
 import Image from '@/components/common/Image'
 import Text from '@/components/common/Text'
 import { createStyle } from '@/utils/tools'
-import { scaleSizeW } from '@/utils/pixelRatio'
+import PlayQueuePanel, { type PlayQueuePanelType } from '@/components/player/PlayQueuePanel'
 
 const styles = createStyle({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: scaleSizeW(12),
-    marginBottom: 8,
-    height: 60,
-    borderRadius: 20,
+    // 贴底全宽（对齐 Salt Player 风格）
+    height: 62,
     paddingLeft: 6,
     paddingRight: 8,
     elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
   },
@@ -74,6 +72,7 @@ const MiniPlayerBar = ({ isHome }: { isHome?: boolean }) => {
   const theme = useTheme()
   const musicInfo = usePlayerMusicInfo()
   const isPlay = useIsPlay()
+  const queuePanelRef = useRef<PlayQueuePanelType>(null)
 
   const handlePressCover = () => {
     if (!musicInfo.id) return
@@ -85,47 +84,48 @@ const MiniPlayerBar = ({ isHome }: { isHome?: boolean }) => {
   }
 
   return (
-    <View style={{ ...styles.container, backgroundColor: theme['c-content-background'] }}>
-      {/* 左侧封面 */}
-      <TouchableOpacity onPress={handlePressCover} activeOpacity={0.8}>
-        <View style={styles.coverWrap}>
-          <Image url={musicInfo.pic} style={styles.cover} resizeMode="cover" />
-        </View>
-      </TouchableOpacity>
+    <>
+      <View style={{ ...styles.container, backgroundColor: theme['c-content-background'] }}>
+        {/* 左侧封面 */}
+        <TouchableOpacity onPress={handlePressCover} activeOpacity={0.8}>
+          <View style={styles.coverWrap}>
+            <Image url={musicInfo.pic} style={styles.cover} resizeMode="cover" />
+          </View>
+        </TouchableOpacity>
 
-      {/* 中间歌曲信息 */}
-      <TouchableOpacity style={styles.songInfo} onPress={handlePressCover} activeOpacity={0.7}>
-        <Text style={styles.songName} color={theme['c-font']} numberOfLines={1}>
-          {musicInfo.name || '未播放'}
-        </Text>
-        {musicInfo.singer ? (
-          <Text style={styles.songArtist} color={theme['c-font-label']} numberOfLines={1}>
-            {musicInfo.singer}
+        {/* 中间歌曲信息 */}
+        <TouchableOpacity style={styles.songInfo} onPress={handlePressCover} activeOpacity={0.7}>
+          <Text style={styles.songName} color={theme['c-font']} numberOfLines={1}>
+            {musicInfo.name || '未播放'}
           </Text>
-        ) : null}
-      </TouchableOpacity>
+          {musicInfo.singer ? (
+            <Text style={styles.songArtist} color={theme['c-font-label']} numberOfLines={1}>
+              {musicInfo.singer}
+            </Text>
+          ) : null}
+        </TouchableOpacity>
 
-      {/* 右侧控制按钮 */}
-      <View style={styles.controls}>
-        <TouchableOpacity
-          onPress={handleTogglePlay}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Icon name={isPlay ? 'pause' : 'play'} color={theme['c-font']} size={24} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.listBtn}
-          onPress={() => {
-            // TODO: 打开播放列表
-          }}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Icon name="list" color={theme['c-font-label']} size={22} />
-        </TouchableOpacity>
+        {/* 右侧控制按钮 */}
+        <View style={styles.controls}>
+          <TouchableOpacity
+            onPress={handleTogglePlay}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Icon name={isPlay ? 'pause' : 'play'} color={theme['c-font']} size={24} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.listBtn}
+            onPress={() => queuePanelRef.current?.show()}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Icon name="menu" color={theme['c-font-label']} size={22} />
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+      <PlayQueuePanel ref={queuePanelRef} />
+    </>
   )
 }
 

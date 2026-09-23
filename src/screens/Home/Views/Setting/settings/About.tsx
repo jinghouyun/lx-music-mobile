@@ -1,146 +1,158 @@
 import { memo } from 'react'
-import { View, TouchableOpacity } from 'react-native'
-
-import Section from '../components/Section'
-// import Button from './components/Button'
+import { View, TouchableOpacity, ScrollView } from 'react-native'
 
 import { createStyle, openUrl } from '@/utils/tools'
-// import { showPactModal } from '@/navigation'
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
 import Text from '@/components/common/Text'
+import { Icon } from '@/components/common/Icon'
 import { showPactModal } from '@/core/common'
 
-// const qqGroupUrl = 'mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26jump_from%3Dwebapi%26k%3Du1zyxek8roQAwic44nOkBXtG9CfbAxFw'
-// const qqGroupUrl2 = 'mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26jump_from%3Dwebapi%26k%3D-l4kNZ2bPQAuvfCQFFhl1UoibvF5wcrQ'
-// const qqGroupWebUrl = 'https://qm.qq.com/cgi-bin/qm/qr?k=jRZkyFSZ4FmUuTHA3P_RAXbbUO_Rrn5e&jump_from=webapi'
-// const qqGroupWebUrl2 = 'https://qm.qq.com/cgi-bin/qm/qr?k=HPNJEfrZpBZ9T8szYWbe2d5JrAAeOt_l&jump_from=webapi'
-
+// 对齐 Salt Player 关于页风格：logo + 名称 + 版本 + 制作人员/更新日志/条款/隐私/开源许可
 export default memo(() => {
   const theme = useTheme()
   const t = useI18n()
+  const currentVer = process.versions.app
+
   const openHomePage = () => {
-    void openUrl('https://github.com/lyswhut/lx-music-mobile#readme')
+    void openUrl('https://github.com/jinghouyun/lx-music-mobile#readme')
   }
   const openIssuePage = () => {
-    void openUrl('https://github.com/lyswhut/lx-music-mobile/issues?q=is%3Aissue+')
+    void openUrl('https://github.com/jinghouyun/lx-music-mobile/issues')
   }
   const openGHReleasePage = () => {
-    void openUrl('https://github.com/lyswhut/lx-music-mobile/releases')
+    void openUrl('https://github.com/jinghouyun/lx-music-mobile/releases')
   }
   const openFAQPage = () => {
     void openUrl('https://lyswhut.github.io/lx-music-doc/mobile/faq')
   }
-  // const openIssuesPage = () => {
-  //   openUrl('https://github.com/lyswhut/lx-music-mobile/issues')
-  // }
+  const openChangelog = () => {
+    void openUrl('https://github.com/jinghouyun/lx-music-mobile/blob/main/CHANGELOG.md')
+  }
+  const openLicense = () => {
+    void openUrl('https://github.com/jinghouyun/lx-music-mobile#%E9%A1%B9%E7%9B%AE%E5%8D%8F%E8%AE%AE')
+  }
   const openPactModal = () => {
     showPactModal()
   }
-  const openPartPage = () => {
-    void openUrl('https://github.com/lyswhut/lx-music-mobile#%E9%A1%B9%E7%9B%AE%E5%8D%8F%E8%AE%AE')
-  }
 
-  // const goToQQGroup = () => {
-  //   openUrl(qqGroupUrl).catch(() => {
-  //     void openUrl(qqGroupWebUrl)
-  //   })
-  // }
-  // const goToQQGroup2 = () => {
-  //   openUrl(qqGroupUrl2).catch(() => {
-  //     void openUrl(qqGroupWebUrl2)
-  //   })
-  // }
-
-  const textLinkStyle = {
-    ...styles.text,
-    textDecorationLine: 'underline',
+  const linkStyle = {
     color: theme['c-primary-font'],
-    // fontSize: 14,
   } as const
 
+  const items = [
+    { label: '制作人员', action: openHomePage, value: '落雪无痕 · LX Music' },
+    { label: '更新日志', action: openChangelog, value: '' },
+    { label: '软件使用条款', action: openPactModal, value: '' },
+    { label: '隐私协议', action: openLicense, value: '' },
+    { label: '开放源代码许可', action: openLicense, value: '' },
+    { label: '常见问题', action: openFAQPage, value: '' },
+    { label: '提交 Issue', action: openIssuePage, value: '' },
+  ]
 
   return (
-    <Section title={t('setting_about')}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Logo 区 */}
+      <View style={styles.logoSection}>
+        <View style={styles.logoWrap}>
+          <Icon name="logo" color={theme['c-primary']} size={52} />
+        </View>
+        <Text style={styles.appName} size={22} color={theme['c-font']}>Apple Music</Text>
+        <View style={styles.versionRow}>
+          <Text size={12} color={theme['c-primary-font']}>LX Music Mobile</Text>
+          <View style={{ ...styles.officialTag, backgroundColor: theme['c-primary-light-700-alpha-500'] }}>
+            <Text size={9} color={theme['c-primary']}>OFFICIAL</Text>
+          </View>
+        </View>
+        <Text size={12} color={theme['c-500']}>v{currentVer}</Text>
+      </View>
+
+      {/* 信息列表 */}
+      <View style={styles.listSection}>
+        {items.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={{ ...styles.item, borderBottomColor: theme['c-border-background'] }}
+            onPress={item.action}
+            activeOpacity={0.7}
+          >
+            <Text size={14} color={theme['c-font']}>{item.label}</Text>
+            <View style={styles.itemRight}>
+              {item.value ? <Text size={12} color={theme['c-500']}>{item.value}</Text> : null}
+              <Icon name="chevron-right" size={16} color={theme['c-300']} />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <View style={styles.part}>
-        <Text style={styles.text} >本软件完全免费，代码已开源。开源地址：</Text>
-        <TouchableOpacity onPress={openHomePage}>
-          <Text style={textLinkStyle}>https://github.com/lyswhut/lx-music-mobile</Text>
-        </TouchableOpacity>
+        <Text style={styles.text} color={theme['c-500']} >本软件完全免费，代码已开源。</Text>
       </View>
       <View style={styles.part}>
-        <Text style={styles.text}>最新版下载地址：</Text>
-        <TouchableOpacity onPress={openGHReleasePage}>
-          <Text style={textLinkStyle}>GitHub Releases</Text>
-        </TouchableOpacity>
+        <Text style={styles.text} color={theme['c-500']}>本软件没有客服，常见问题请先阅读 FAQ。</Text>
       </View>
       <View style={styles.part}>
-        <Text style={styles.text} >软件的常见问题可转至：</Text>
-        <TouchableOpacity onPress={openFAQPage}>
-          <Text style={textLinkStyle}>移动版常见问题</Text>
-        </TouchableOpacity>
+        <Text style={styles.text} color={theme['c-500']}>目前本项目原始发布地址只有 GitHub，谨防第三方修改版。</Text>
       </View>
-      <View style={styles.part}>
-        <Text style={styles.text}><Text style={styles.boldText}>本软件没有客服</Text>，但我们整理了一些常见的使用问题。<Text style={styles.boldText} >仔细、仔细、仔细</Text>地阅读常见问题后，</Text>
-        <Text style={styles.text}>仍有问题可到 GitHub </Text>
-        <TouchableOpacity onPress={openIssuePage}>
-          <Text style={textLinkStyle}>提交 Issue</Text>
-        </TouchableOpacity>
-        <Text style={styles.text}>。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>由于软件开发的初衷仅是为了对新技术的学习与研究，因此软件直至停止维护都将会一直保持纯净。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>目前本项目的原始发布地址<Text style={styles.boldText}>只有 GitHub</Text>，其他渠道均为第三方转载发布，可信度请自行鉴别。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}><Text style={styles.boldText}>本项目没有微信公众号之类的所谓「官方账号」，也未在小米、华为、vivo 等应用商店发布同名应用，谨防被骗！</Text></Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>若你使用过程中遇到<Text style={styles.boldText}>广告</Text>或者<Text style={styles.boldText}>引流</Text>（如需要加群、关注公众号之类才能使用或者升级）的信息，则表明你当前运行的软件是「第三方修改版」。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>若在升级新版本时提示「<Text style={styles.boldText}>签名不一致</Text>」，则表明你手机上的旧版本或者将要安装的新版本中<Text style={styles.boldText}>有一方</Text>是「<Text style={styles.boldText}>第三方修改版</Text>」。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>你已签署本软件的</Text>
-        <TouchableOpacity onPress={openPactModal}><Text style={styles.text} color={theme['c-primary-font']}>许可协议</Text></TouchableOpacity>
-        <Text style={styles.text}>，协议的在线版本在</Text>
-        <TouchableOpacity onPress={openPartPage}><Text style={textLinkStyle}>这里</Text></TouchableOpacity>
-        <Text style={styles.text}>。</Text>
-      </View>
-      <View style={styles.part}>
-        <Text style={styles.text}>By: </Text>
-        <Text style={styles.text}>落雪无痕</Text>
-      </View>
-    </Section>
+    </ScrollView>
   )
 })
 
 const styles = createStyle({
-  part: {
-    marginLeft: 15,
-    marginRight: 15,
-    marginBottom: 10,
+  container: {
+    flex: 1,
+  },
+  logoSection: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 30,
+  },
+  logoWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 20,
+    backgroundColor: 'rgba(214,69,65,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  appName: {
+    fontWeight: '700',
+  },
+  versionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  officialTag: {
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  listSection: {
+    marginTop: 10,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+  },
+  itemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  part: {
+    marginLeft: 20,
+    marginRight: 20,
+    marginTop: 10,
   },
   text: {
-    fontSize: 14,
+    fontSize: 12,
     textAlignVertical: 'bottom',
-  },
-  boldText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    textAlignVertical: 'bottom',
-  },
-  throughText: {
-    fontSize: 14,
-    textDecorationLine: 'line-through',
-    textAlignVertical: 'bottom',
-  },
-  btn: {
-    flexDirection: 'row',
   },
 })

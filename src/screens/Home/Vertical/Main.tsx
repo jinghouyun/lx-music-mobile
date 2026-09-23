@@ -6,6 +6,7 @@ import Mylist from '../Views/Mylist'
 import Leaderboard from '../Views/Leaderboard'
 import Download from '../Views/Download'
 import Setting from '../Views/Setting'
+import Stat from '../Views/Stat'
 import commonState, { type InitState as CommonState } from '@/store/common/state'
 import { createStyle } from '@/utils/tools'
 import PagerView, { type PageScrollStateChangedNativeEvent, type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
@@ -60,6 +61,7 @@ const SongListPage = makePage('nav_songlist', <SongList />)
 const LeaderboardPage = makePage('nav_top', <Leaderboard />)
 const MylistPage = makePage('nav_love', <Mylist />)
 const DownloadPage = makePage('nav_download', <Download />)
+const StatPage = makePage('nav_stat', <Stat />)
 const SettingPage = () => {
   const [visible, setVisible] = useState(commonState.navActiveId == 'nav_setting')
   const component = useMemo(() => <Setting />, [])
@@ -83,7 +85,8 @@ const viewMap = {
   nav_top: 2,
   nav_love: 3,
   nav_download: 4,
-  nav_setting: 5,
+  nav_stat: 5,
+  nav_setting: 6,
 }
 const indexMap = [
   'nav_search',
@@ -91,6 +94,7 @@ const indexMap = [
   'nav_top',
   'nav_love',
   'nav_download',
+  'nav_stat',
   'nav_setting',
 ] as const
 
@@ -153,6 +157,9 @@ const Main = () => {
       </View>
       <View collapsable={false} key="nav_download" style={styles.pageStyle}>
         <DownloadPage />
+      </View>
+      <View collapsable={false} key="nav_stat" style={styles.pageStyle}>
+        <StatPage />
       </View>
       <View collapsable={false} key="nav_setting" style={styles.pageStyle}>
         <SettingPage />

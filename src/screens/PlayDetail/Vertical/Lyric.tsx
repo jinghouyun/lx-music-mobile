@@ -6,7 +6,7 @@ import { createStyle } from '@/utils/tools'
 // import { useComponentIds } from '@/store/common/hook'
 import { useTheme } from '@/store/theme/hook'
 import { useSettingValue } from '@/store/setting/hook'
-import { AnimatedColorText } from '@/components/common/Text'
+import Text, { AnimatedColorText } from '@/components/common/Text'
 import { setSpText } from '@/utils/pixelRatio'
 import playerState from '@/store/player/state'
 import { scrollTo } from '@/utils/scroll'
@@ -71,16 +71,17 @@ const LrcLine = memo(({ line, lineNum, activeLine, onLayout }: LineProps) => {
 
   const colors = useMemo(() => {
     const active = activeLine == lineNum
+    // 红色渐变背景上统一使用白色系歌词
     return active ? [
-      theme['c-primary'],
-      theme['c-primary-alpha-200'],
+      'rgba(255,255,255,0.95)',
+      'rgba(255,255,255,0.7)',
       1,
     ] as const : [
-      theme['c-350'],
-      theme['c-300'],
+      'rgba(255,255,255,0.5)',
+      'rgba(255,255,255,0.4)',
       0.6,
     ] as const
-  }, [activeLine, lineNum, theme])
+  }, [activeLine, lineNum])
 
   const handleLayout = ({ nativeEvent }: LayoutChangeEvent) => {
     onLayout(lineNum, nativeEvent.layout.height, nativeEvent.layout.width)
@@ -310,6 +311,15 @@ export default () => {
 
   return (
     <>
+      {
+        lyricLines.length
+          ? (
+              <View style={styles.lrcTag}>
+                <Text size={11} color="rgba(255,255,255,0.55)">LRC FILE UTF-8</Text>
+              </View>
+            )
+          : null
+      }
       <FlatList
         data={lyricLines}
         renderItem={renderItem}
@@ -332,6 +342,12 @@ export default () => {
 }
 
 const styles = createStyle({
+  lrcTag: {
+    position: 'absolute',
+    top: 8,
+    right: 20,
+    zIndex: 10,
+  },
   container: {
     flex: 1,
     paddingLeft: 20,

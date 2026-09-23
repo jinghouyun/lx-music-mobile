@@ -133,15 +133,16 @@ export function pushPlayDetailScreen(componentId: string, skipAnimation = false)
           statusBar: {
             drawBehind: true,
             visible: true,
-            style: getStatusBarStyle(theme.isDark),
+            // 播放页为红色渐变背景，固定浅色状态栏文字
+            style: 'light',
             backgroundColor: 'transparent',
           },
           navigationBar: {
             // visible: false,
-            backgroundColor: theme['c-content-background'],
+            backgroundColor: '#8f1c1c',
           },
           layout: {
-            componentBackgroundColor: theme['c-content-background'],
+            componentBackgroundColor: '#5a1212',
           },
           animations: {
             push: skipAnimation ? {} : {
