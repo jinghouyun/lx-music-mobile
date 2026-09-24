@@ -5,185 +5,69 @@ import { useNavActiveId, useStatusbarHeight } from '@/store/common/hook'
 import { useTheme } from '@/store/theme/hook'
 import { Icon } from '@/components/common/Icon'
 import { confirmDialog, createStyle, exitApp as backHome } from '@/utils/tools'
-import { NAV_MENUS } from '@/config/constant'
-import type { InitState } from '@/store/common/state'
 import { exitApp, setNavActiveId } from '@/core/common'
 import Text from '@/components/common/Text'
-import { useSettingValue } from '@/store/setting/hook'
-import { setTheme } from '@/core/theme'
-import { updateSetting } from '@/core/common'
-import { getTheme } from '@/theme/themes'
-import themeState from '@/store/theme/state'
 
 const styles = createStyle({
   container: {
     flex: 1,
+    backgroundColor: '#000000',
   },
-  header: {
-    paddingTop: 18,
-    paddingBottom: 14,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+  statusBarSpace: {
+    paddingTop: 24,
   },
-  headerText: {
-    textAlign: 'center',
-    marginLeft: 10,
-  },
-  headerVersion: {
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  // 外观切换
-  appearance: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 18,
-    paddingBottom: 16,
-  },
-  appearanceItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginHorizontal: 4,
-  },
-  appearanceIcon: {
-    marginBottom: 3,
-  },
-  menus: {
-    flex: 1,
-  },
-  list: {
-    paddingTop: 10,
-    paddingBottom: 10,
+  groupCard: {
+    backgroundColor: '#1c1c1e',
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    paddingVertical: 4,
   },
   menuItem: {
     flexDirection: 'row',
-    paddingTop: 13,
-    paddingBottom: 13,
-    paddingLeft: 25,
-    paddingRight: 25,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
   },
-  iconContent: {
-    width: 24,
+  menuIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  text: {
-    paddingLeft: 20,
+  menuText: {
+    marginLeft: 14,
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '500',
   },
 })
 
-const Header = () => {
-  const theme = useTheme()
-  const statusBarHeight = useStatusbarHeight()
-  return (
-    <View style={{ paddingTop: statusBarHeight + 10, backgroundColor: theme['c-primary-light-700-alpha-500'] }}>
-      <View style={styles.header}>
-        <Icon name="logo" color={theme['c-primary-dark-100-alpha-300']} size={30} />
-        <View>
-          <Text style={styles.headerText} size={22} color={theme['c-primary-dark-100-alpha-300']}>Apple Music</Text>
-          <Text style={styles.headerVersion} size={10} color={theme['c-primary-dark-100-alpha-400']}>LX Music · Salt Player UI</Text>
-        </View>
-      </View>
-    </View>
-  )
-}
+type IdType = 'nav_search' | 'nav_songlist' | 'nav_top' | 'nav_love' | 'nav_download' | 'nav_setting' | 'nav_exit' | 'back_home'
 
-/**
- * 外观模式切换（对齐 Salt Player：跟随系统 / 浅色 / 深色）
- */
-const AppearanceSwitch = () => {
-  const t = useI18n()
-  const theme = useTheme()
-  const isAutoTheme = useSettingValue('common.isAutoTheme')
-  const themeId = useSettingValue('theme.id')
-
-  // 当前模式：auto=跟随系统；black=深色；其他=浅色
-  const currentMode = isAutoTheme ? 'auto' : (themeId == 'black' ? 'dark' : 'light')
-
-  const handleSelect = (mode: 'auto' | 'light' | 'dark') => {
-    updateSetting({ 'common.isAutoTheme': mode == 'auto' })
-    if (mode == 'dark') {
-      updateSetting({ 'theme.id': 'black' })
-      setTheme('black')
-    } else if (mode == 'light') {
-      const id = themeId == 'black' ? 'green' : themeId
-      updateSetting({ 'theme.id': id })
-      void getTheme().then(th => {
-        if (th.id == themeState.theme.id) return
-        setTheme(id)
-      })
-    } else {
-      // 跟随系统：重新应用自动主题
-      void getTheme().then(th => {
-        if (th.id == themeState.theme.id) return
-        setTheme(th.id)
-      })
-    }
-  }
-
-  const items = [
-    { mode: 'auto' as const, icon: 'available_updates', label: t('appearance_follow_system') },
-    { mode: 'light' as const, icon: 'album', label: t('appearance_light') },
-    { mode: 'dark' as const, icon: 'logo', label: t('appearance_dark') },
-  ]
-
-  return (
-    <View style={styles.appearance}>
-      {items.map(item => {
-        const active = currentMode == item.mode
-        return (
-          <TouchableOpacity
-            key={item.mode}
-            style={{
-              ...styles.appearanceItem,
-              backgroundColor: active ? theme['c-primary-light-700-alpha-500'] : 'transparent',
-            }}
-            activeOpacity={0.6}
-            onPress={() => handleSelect(item.mode)}
-          >
-            <Icon name={item.icon} size={18} color={active ? theme['c-primary'] : theme['c-font-label']} />
-            <Text size={10} color={active ? theme['c-primary'] : theme['c-font-label']}>{item.label}</Text>
-          </TouchableOpacity>
-        )
-      })}
-    </View>
-  )
-}
-
-type IdType = InitState['navActiveId'] | 'nav_exit' | 'back_home'
-
-const MenuItem = ({ id, icon, onPress }: {
+const MenuItem = ({ id, icon, color, onPress, label }: {
   id: IdType
   icon: string
+  color: string
   onPress: (id: IdType) => void
+  label: string
 }) => {
-  const t = useI18n()
   const activeId = useNavActiveId()
-  const theme = useTheme()
-
-  return activeId == id
-    ? <View style={styles.menuItem}>
-        <View style={styles.iconContent}>
-          <Icon name={icon} size={20} color={theme['c-primary-font-active']} />
-        </View>
-        <Text style={styles.text} color={theme['c-primary-font']}>{t(id)}</Text>
+  const isActive = activeId == id
+  return (
+    <TouchableOpacity style={styles.menuItem} onPress={() => { onPress(id) }} activeOpacity={0.7}>
+      <View style={{ ...styles.menuIcon, backgroundColor: color }}>
+        <Icon name={icon} size={16} color="#fff" />
       </View>
-    : <TouchableOpacity style={styles.menuItem} onPress={() => { onPress(id) }}>
-        <View style={styles.iconContent}>
-          <Icon name={icon} size={20} color={theme['c-font-label']} />
-        </View>
-        <Text style={styles.text}>{t(id)}</Text>
-      </TouchableOpacity>
+      <Text style={{ ...styles.menuText, opacity: isActive ? 1 : 0.9 }}>{label}</Text>
+    </TouchableOpacity>
+  )
 }
 
 export default memo(() => {
-  const theme = useTheme()
-  // console.log('render drawer nav')
-  const showBackBtn = useSettingValue('common.showBackBtn')
-  const showExitBtn = useSettingValue('common.showExitBtn')
+  const t = useI18n()
+  const statusBarHeight = useStatusbarHeight()
 
   const handlePress = (id: IdType) => {
     switch (id) {
@@ -200,28 +84,27 @@ export default memo(() => {
         backHome()
         return
     }
-
     global.app_event.changeMenuVisible(false)
     setNavActiveId(id)
   }
 
-
   return (
-    <View style={{ ...styles.container, backgroundColor: theme['c-content-background'] }}>
-      <Header />
-      <AppearanceSwitch />
-      <ScrollView style={styles.menus}>
-        <View style={styles.list}>
-          {NAV_MENUS.map(menu => <MenuItem key={menu.id} id={menu.id} icon={menu.icon} onPress={handlePress} />)}
+    <View style={styles.container}>
+      <View style={{ height: statusBarHeight }} />
+      <ScrollView>
+        {/* 第一组：歌曲/专辑/艺术家/文件夹/歌单 */}
+        <View style={styles.groupCard}>
+          <MenuItem id="nav_search" icon="search" color="#34c759" label={t('nav_search')} onPress={handlePress} />
+          <MenuItem id="nav_love" icon="favorite" color="#ff3b30" label={t('nav_love')} onPress={handlePress} />
+          <MenuItem id="nav_top" icon="rank" color="#ffcc00" label={t('nav_top')} onPress={handlePress} />
+          <MenuItem id="nav_songlist" icon="folder" color="#af52de" label={t('nav_songlist')} onPress={handlePress} />
+          <MenuItem id="nav_download" icon="download" color="#007aff" label={t('nav_download')} onPress={handlePress} />
+        </View>
+        {/* 第二组：设置/关于 */}
+        <View style={styles.groupCard}>
+          <MenuItem id="nav_setting" icon="settings" color="#34c759" label={t('nav_setting')} onPress={handlePress} />
         </View>
       </ScrollView>
-
-      {
-        showBackBtn ? <MenuItem id="back_home" icon="home" onPress={handlePress} /> : null
-      }
-      {
-        showExitBtn ? <MenuItem id="nav_exit" icon="exit2" onPress={handlePress} /> : null
-      }
     </View>
   )
 })
