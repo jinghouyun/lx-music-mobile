@@ -12,7 +12,6 @@ import { Icon } from '@/components/common/Icon'
 import Image from '@/components/common/Image'
 import Text from '@/components/common/Text'
 import { createStyle } from '@/utils/tools'
-import PlayQueuePanel, { type PlayQueuePanelType } from '@/components/player/PlayQueuePanel'
 
 const styles = createStyle({
   container: {
@@ -72,7 +71,6 @@ const MiniPlayerBar = ({ isHome }: { isHome?: boolean }) => {
   const theme = useTheme()
   const musicInfo = usePlayerMusicInfo()
   const isPlay = useIsPlay()
-  const queuePanelRef = useRef<PlayQueuePanelType>(null)
 
   const handlePressCover = () => {
     if (!musicInfo.id) return
@@ -114,17 +112,8 @@ const MiniPlayerBar = ({ isHome }: { isHome?: boolean }) => {
           >
             <Icon name={isPlay ? 'pause' : 'play'} color={theme['c-font']} size={24} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.listBtn}
-            onPress={() => queuePanelRef.current?.show()}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Icon name="menu" color={theme['c-font-label']} size={22} />
-          </TouchableOpacity>
         </View>
       </View>
-      <PlayQueuePanel ref={queuePanelRef} />
     </>
   )
 }
