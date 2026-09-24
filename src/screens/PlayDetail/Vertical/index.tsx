@@ -14,8 +14,8 @@ import { createStyle } from '@/utils/tools'
 import LinearGradient from '@/components/common/LinearGradient'
 // import { useTheme } from '@/store/theme/hook'
 
-// 播放页红色渐变背景（对齐 Salt Player 风格）
-const GRADIENT_COLORS = ['#2a0a0a', '#5a1212', '#8f1c1c', '#b3261e', '#d43a2a']
+// 播放页Salt Player风格暗色渐变背景
+const GRADIENT_COLORS = ['#000000', '#121212', '#1e1e1e', '#282828']
 
 const LyricPage = ({ activeIndex }: { activeIndex: number }) => {
   const initedRef = useRef(false)

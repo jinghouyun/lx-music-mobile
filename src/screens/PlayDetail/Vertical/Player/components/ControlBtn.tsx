@@ -53,10 +53,11 @@ export default () => {
   }, [maxHeight])
   const size = Math.min(Math.max(winSize.width * 0.33 * global.lx.fontSize * 0.4, MIN_SIZE), MAX_SIZE, maxHeight)
 
+  const playBtnSize = size * 1.35
   return (
     <View style={containerStyle}>
       <PrevBtn size={size} />
-      <TogglePlayBtn size={size}/>
+      <TogglePlayBtn size={playBtnSize}/>
       <NextBtn size={size} />
     </View>
   )
