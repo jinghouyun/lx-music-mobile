@@ -8,7 +8,6 @@ import { getListPosition, getListPrevSelectId, saveListPosition } from '@/utils/
 // import { useMusicList } from '@/store/list/hook'
 import { getListMusics, setActiveList } from '@/core/list'
 import ListItem, { ITEM_HEIGHT } from './ListItem'
-import AlphabetIndex from './AlphabetIndex'
 import { createStyle, getRowInfo } from '@/utils/tools'
 import { usePlayInfo, usePlayMusicInfo } from '@/store/player/hook'
 import type { Position } from './ListMenu'
@@ -250,27 +249,6 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
   }
 
 
-  // 计算字母索引分段：歌名首字符（英文 A-Z，其他归 #）
-  const alphabetSections = useMemo(() => {
-    const sections = new Map<string, number>()
-    const rowNum = rowInfo.current.rowNum ?? 1
-    currentList.forEach((item, index) => {
-      const first = (item.name || '').trim().charAt(0).toUpperCase()
-      const letter = /[A-Z]/.test(first) ? first : '#'
-      if (!sections.has(letter)) sections.set(letter, Math.floor(index / rowNum))
-    })
-    return sections
-  }, [currentList])
-
-  const handlePressLetter = (letter: string) => {
-    const rowIndex = alphabetSections.get(letter)
-    if (rowIndex == undefined) return
-    try {
-      flatListRef.current?.scrollToIndex({ index: rowIndex, viewPosition: 0, animated: false })
-    } catch {}
-  }
-
-
   const renderItem: FlatListType['renderItem'] = ({ item, index }) => (
     <ListItem
       item={item}
@@ -309,11 +287,6 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
         extraData={activeIndex}
         getItemLayout={getItemLayout}
       />
-      {
-        alphabetSections.size
-          ? <AlphabetIndex sections={alphabetSections} onPress={handlePressLetter} />
-          : null
-      }
     </View>
   )
 })
