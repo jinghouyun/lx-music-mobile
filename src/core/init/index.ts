@@ -13,8 +13,6 @@ import { setApiSource } from '@/core/apiSource'
 import commonActions from '@/store/common/action'
 import { checkUpdate } from '@/core/version'
 import { bootLog } from '@/utils/bootLog'
-import { state as userApiState } from '@/store/userApi/state'
-import { updateSetting } from '@/core/common'
 
 let isFirstPush = true
 const handlePushedHomeScreen = async() => {
@@ -43,23 +41,8 @@ export default async() => {
   await initUserApi(setting)
   bootLog('User Api inited.')
 
-  // 全新安装/重置后音源为空，或已选音源已被删除/失效时，自动选中第一个可用音源，
-  // 做到“打开就能听”，无需手动去音源选择里点选。
-  let apiSource = setting['common.apiSource']
-  const apiList = userApiState.list
-  const currentApi = apiList.find(a => a.id === apiSource)
-  // 跳过已宕机的中转音源（六音/野花/野草依赖的中转服务器已离线）
-  const isDeadSource = !!currentApi && ['六音', '野花', '野草'].some(n => currentApi.name.includes(n))
-  const isCurrentValid = !!apiSource && !!currentApi && !isDeadSource
-  if (!isCurrentValid && apiList.length) {
-    // 优先 Free listen（纯平台直连，不依赖第三方中转服务器，最稳定）
-    const preferred = apiList.find(a => a.name.includes('Free listen')) ?? apiList.find(a => !['六音', '野花', '野草'].some(n => a.name.includes(n))) ?? apiList[0]
-    apiSource = preferred.id
-    setting['common.apiSource'] = apiSource
-    await updateSetting({ 'common.apiSource': apiSource })
-    bootLog(`Auto selected api source: ${preferred.name}`)
-  }
-  setApiSource(apiSource)
+  // 直接使用设置中保存的音源，保证启动稳定
+  setApiSource(setting['common.apiSource'])
   bootLog('Api inited.')
 
   registerPlaybackService()
