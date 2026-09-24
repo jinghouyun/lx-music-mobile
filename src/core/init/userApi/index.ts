@@ -1,10 +1,10 @@
-import { type InitParams, onScriptAction, sendAction, type ResponseParams, type RequestParams } from '@/utils/nativeModules/userApi'
+import { type InitParams, onScriptAction, sendAction, type ResponseParams, type UpdateInfoParams, type RequestParams } from '@/utils/nativeModules/userApi'
 import { log, setUserApiList, setUserApiStatus } from '@/core/userApi'
 import settingState from '@/store/setting/state'
 import BackgroundTimer from 'react-native-background-timer'
 import { fetchData } from './request'
 import { getUserApiList } from '@/utils/data'
-import { tipDialog } from '@/utils/tools'
+import { confirmDialog, openUrl, tipDialog } from '@/utils/tools'
 
 
 export default async(setting: LX.AppSetting) => {
@@ -189,10 +189,27 @@ export default async(setting: LX.AppSetting) => {
     }
     if (!global.lx.apiInitPromise[1]) global.lx.apiInitPromise[2](status)
   }
-  const showUpdateAlert = () => {
-    // 已按需求屏蔽音源脚本弹出的更新/免责声明类弹窗（脚本可任意填写正文，
-    // 此前会出现“本软件免费开源…给好评/差评”等与本应用无关的提示）。
-    // 该事件在脚本侧为发后即忘（resolve 不依赖 App 回调），直接忽略即可。
+  const showUpdateAlert = ({ name, log, updateUrl }: UpdateInfoParams) => {
+    if (updateUrl) {
+      void confirmDialog({
+        message: `${global.i18n.t('user_api_update_alert', { name })}\n${log}`,
+        // selection: true,
+        // showCancel: true,
+        confirmButtonText: global.i18n.t('user_api_update_alert_open_url'),
+        cancelButtonText: global.i18n.t('close'),
+      }).then(confirm => {
+        if (!confirm) return
+        setTimeout(() => {
+          void openUrl(updateUrl)
+        }, 300)
+      })
+    } else {
+      void tipDialog({
+        message: `${global.i18n.t('user_api_update_alert', { name })}\n${log}`,
+        // selection: true,
+        btnText: global.i18n.t('ok'),
+      })
+    }
   }
 
   onScriptAction((event) => {
@@ -236,47 +253,4 @@ export default async(setting: LX.AppSetting) => {
   })
 
   setUserApiList(await getUserApiList())
-
-  // 自动导入内置音源（缺哪个补哪个，覆盖安装也能更新）
-  try {
-    console.log('Checking built-in sources...')
-    const { importUserApi } = await import('@/core/userApi')
-
-    // 所有内置音源（JSON 包装，避免 Metro 执行 JS）
-    const sources = [
-      require('@/resources/user-api/listen1.json').script,
-      require('@/resources/user-api/flower.json').script,
-      require('@/resources/user-api/grass.json').script,
-      require('@/resources/user-api/ikun.json').script,
-      require('@/resources/user-api/sixyin.json').script,
-    ]
-
-    // 已有音源的名称列表
-    const existingNames = new Set((await getUserApiList()).map(api => api.name))
-
-    let importedCount = 0
-    for (const source of sources) {
-      try {
-        // 从脚本头部提取 @name
-        const nameMatch = source.match(/@name\s+(.+?)(\n|$)/)
-        const sourceName = nameMatch ? nameMatch[1].trim() : 'unknown'
-
-        if (existingNames.has(sourceName)) {
-          console.log('Source already exists, skip:', sourceName)
-          continue
-        }
-
-        await importUserApi(source)
-        existingNames.add(sourceName)
-        importedCount++
-        console.log('Imported built-in source:', sourceName)
-      } catch (err) {
-        console.log('Failed to import source:', err)
-      }
-    }
-
-    console.log(`Built-in sources check done. Imported: ${importedCount}`)
-  } catch (err) {
-    console.log('Failed to check built-in sources:', err)
-  }
 }
