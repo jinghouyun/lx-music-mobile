@@ -252,5 +252,33 @@ export default async(setting: LX.AppSetting) => {
     }
   })
 
+  // 自动导入内置三个音源，仅首次启动执行，失败不影响APP
+  try {
+    const existingList = await getUserApiList()
+    if (!existingList || existingList.length === 0) {
+      const RNFS = require('react-native-fs')
+      const sourceFiles = ['sixyin.js', 'huibq.js', 'flower.js']
+      const sourceNames = ['六音SixYin', 'Huibq', 'Flower']
+      const newList = []
+      for (let i = 0; i < sourceFiles.length; i++) {
+        try {
+          const filePath = `${RNFS.MainBundlePath}/assets/sources/${sourceFiles[i]}`
+          const script = await RNFS.readFile(filePath, 'utf8')
+          newList.push({
+            id: `built_in_${i}`,
+            name: sourceNames[i],
+            script: script,
+            type: 'js',
+            theme: null,
+          })
+        } catch (e) {}
+      }
+      if (newList.length > 0) {
+        await setUserApiList(newList)
+        settingState.setting['common.apiSource'] = newList[0].id
+      }
+    }
+  } catch (e) {}
+
   setUserApiList(await getUserApiList())
 }
