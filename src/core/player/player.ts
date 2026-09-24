@@ -4,8 +4,6 @@ import {
 } from '@/core/player/playStatus'
 import playerState from '@/store/player/state'
 import settingState from '@/store/setting/state'
-import userApiState from '@/store/userApi/state'
-import { setApiSource } from '@/core/apiSource'
 import {
   getList,
   setPlayMusicInfo,
@@ -134,66 +132,6 @@ const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListIt
   })
 }
 
-/**
- * 自动换源会话：同一首歌的一次播放尝试中，记录已试过的 userApi 音源，
- * 全部试过仍失败才放弃（走 error 跳下一首），避免无限循环切换。
- */
-let switchSession = {
-  gettingUrlId: '',
-  triedIds: new Set<string>(),
-}
-const resetSwitchSession = (gettingUrlId: string) => {
-  if (switchSession.gettingUrlId == gettingUrlId) return
-  switchSession.gettingUrlId = gettingUrlId
-  switchSession.triedIds = new Set()
-}
-
-/**
- * 切换到下一个未尝试的 userApi 音源，等其真正初始化完成后重试播放。
- * @returns true=已安排重试；false=已无音源可试，应放弃
- */
-const trySwitchApiSource = async(
-  musicInfo: LX.Music.MusicInfo | LX.Download.ListItem,
-  gettingUrlId: string,
-): Promise<boolean> => {
-  const userApiList = userApiState.list
-  if (userApiList.length <= 1) return false
-
-  const currentApiId = settingState.setting['common.apiSource']
-  if (currentApiId && /^user_api/.test(currentApiId)) {
-    switchSession.triedIds.add(currentApiId)
-  }
-
-  const nextApi = userApiList.find(api => !switchSession.triedIds.has(api.id))
-  if (!nextApi) {
-    console.log('Auto switch: all user api sources tried:', [...switchSession.triedIds])
-    return false
-  }
-
-  console.log(`Auto switch api source: ${currentApiId} -> ${nextApi.id} (${nextApi.name}), tried:`, [...switchSession.triedIds])
-  setStatusText(`当前音源失败，正在切换到：${nextApi.name}`)
-  setApiSource(nextApi.id)
-
-  // 等待音源真正初始化完成（不再固定 2 秒）
-  const initOk = await global.lx.apiInitPromise[0]
-
-  // 初始化期间用户可能已切歌/停止
-  if (global.lx.gettingUrlId != gettingUrlId || musicInfo.id != playerState.playMusicInfo.musicInfo?.id) return true
-
-  if (!initOk) {
-    // 该音源初始化失败，继续尝试下一个
-    return await trySwitchApiSource(musicInfo, gettingUrlId)
-  }
-
-  // 让本轮 setMusicUrl 的 finally 先执行（清理 gettingUrlId），再发起重试，
-  // 否则重试会被 diffCurrentMusicInfo 判定为“未变化”而拦截。
-  BackgroundTimer.setTimeout(() => {
-    if (musicInfo.id != playerState.playMusicInfo.musicInfo?.id) return
-    setMusicUrl(musicInfo, true)
-  }, 0)
-  return true
-}
-
 export const setMusicUrl = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh?: boolean) => {
   // addLoadTimeout()
   if (!diffCurrentMusicInfo(musicInfo)) return
@@ -202,17 +140,9 @@ export const setMusicUrl = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
   void getMusicPlayUrl(musicInfo, isRefresh).then((url) => {
     if (!url) return
     setResource(musicInfo, url, playerState.progress.nowPlayTime)
-  }).catch(async(err: any) => {
+  }).catch((err: any) => {
     console.log(err)
     setStatusText(err.message as string)
-
-    // 自动切换音源：逐个尝试未试过的 userApi 音源，等其初始化完成后重试
-    const gettingUrlId = global.lx.gettingUrlId
-    resetSwitchSession(gettingUrlId)
-    const switched = await trySwitchApiSource(musicInfo, gettingUrlId)
-    if (switched) return
-
-    // 所有音源均失败
     global.app_event.error()
     addDelayNextTimeout()
   }).finally(() => {
@@ -361,20 +291,6 @@ export const playList = async(listId: string, index: number) => {
   setPlayListId(listId)
   setPlayMusicInfo(listId, getList(listId)[index])
   if (settingState.setting['player.isAutoCleanPlayedList'] || prevListId != listId) clearPlayedList()
-  clearTempPlayeList()
-  await handlePlay()
-}
-
-/**
- * 临时播放一首列表外的歌曲（原子随身听下载列表点歌）
- * @param musicInfo 歌曲信息
- */
-export const playMusicInfo = async(musicInfo: LX.Music.MusicInfo) => {
-  if (!musicInfo) return
-  const prevListId = playerState.playInfo.playerListId
-  setPlayListId(null)
-  setPlayMusicInfo(null, musicInfo, true)
-  if (settingState.setting['player.isAutoCleanPlayedList'] || prevListId != null) clearPlayedList()
   clearTempPlayeList()
   await handlePlay()
 }
