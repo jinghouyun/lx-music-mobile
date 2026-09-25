@@ -12,6 +12,7 @@ import { Icon } from '@/components/common/Icon'
 import Image from '@/components/common/Image'
 import Text from '@/components/common/Text'
 import { createStyle } from '@/utils/tools'
+import { NAV_SHEAR_NATIVE_IDS } from '@/config/constant'
 
 const styles = createStyle({
   container: {
@@ -89,7 +90,7 @@ const MiniPlayerBar = ({ isHome }: { isHome?: boolean }) => {
         {/* 左侧封面 */}
         <TouchableOpacity onPress={handlePressCover} activeOpacity={0.8}>
           <View style={styles.coverWrap}>
-            <Image url={musicInfo.pic} style={styles.cover} resizeMode="cover" />
+            <Image url={musicInfo.pic} style={styles.cover} resizeMode="cover" nativeID={NAV_SHEAR_NATIVE_IDS.playDetail_pic} />
           </View>
         </TouchableOpacity>
 

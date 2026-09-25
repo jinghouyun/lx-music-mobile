@@ -89,8 +89,8 @@ const defaultSetting: LX.AppSetting = {
   'sync.enable': false,
 
   // 'theme.id': 'blue_plus',
-  'theme.id': 'green',
-  'theme.lightId': 'green',
+  'theme.id': 'salt',
+  'theme.lightId': 'salt',
   'theme.darkId': 'black',
   'theme.hideBgDark': false,
   'theme.dynamicBg': false,

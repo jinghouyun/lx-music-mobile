@@ -71,17 +71,16 @@ const LrcLine = memo(({ line, lineNum, activeLine, onLayout }: LineProps) => {
 
   const colors = useMemo(() => {
     const active = activeLine == lineNum
-    // 红色渐变背景上统一使用白色系歌词
     return active ? [
-      'rgba(255,255,255,0.95)',
-      'rgba(255,255,255,0.7)',
+      theme['c-primary'],
+      theme['c-primary-dark-100'],
       1,
     ] as const : [
-      'rgba(255,255,255,0.5)',
-      'rgba(255,255,255,0.4)',
+      theme['c-sub-text'],
+      theme['c-sub-text'],
       0.6,
     ] as const
-  }, [activeLine, lineNum])
+  }, [activeLine, lineNum, theme])
 
   const handleLayout = ({ nativeEvent }: LayoutChangeEvent) => {
     onLayout(lineNum, nativeEvent.layout.height, nativeEvent.layout.width)

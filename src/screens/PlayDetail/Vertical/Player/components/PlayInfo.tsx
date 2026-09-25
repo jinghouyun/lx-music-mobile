@@ -12,12 +12,13 @@ import { useBufferProgress } from '@/plugins/player'
 // const FONT_SIZE = 13
 
 const PlayTimeCurrent = ({ timeStr }: { timeStr: string }) => {
-  // 红色渐变背景上使用白色系
-  return <Text color="rgba(255,255,255,0.75)">{timeStr}</Text>
+  const theme = useTheme()
+  return <Text color={theme['c-sub-text']}>{timeStr}</Text>
 }
 
 const PlayTimeMax = memo(({ timeStr }: { timeStr: string }) => {
-  return <Text color="rgba(255,255,255,0.75)">{timeStr}</Text>
+  const theme = useTheme()
+  return <Text color={theme['c-sub-text']}>{timeStr}</Text>
 })
 
 export default () => {

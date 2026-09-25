@@ -6,6 +6,24 @@ const { createThemeColors } = require('./utils')
 
 const defaultThemes = [
   {
+    id: 'salt',
+    name: '椒盐音乐',
+    isDark: false,
+    config: {
+      primary: 'rgb(4, 112, 230)',
+      font: 'rgb(30, 23, 21)',
+      'c-app-background': 'rgba(247, 249, 250, 1)',
+      'c-main-background': 'rgb(247, 249, 250)',
+      'bg-image': '',
+      'bg-image-position': 'center',
+      'bg-image-size': 'cover',
+
+      'c-badge-primary': 'var(c-primary)',
+      'c-badge-secondary': '#3498db',
+      'c-badge-tertiary': '#e74c3c',
+    },
+  },
+  {
     id: 'green',
     name: '绿意盎然',
     isDark: false,

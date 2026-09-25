@@ -11,11 +11,7 @@ import Lyric from './Lyric'
 import { screenkeepAwake, screenUnkeepAwake } from '@/utils/nativeModules/utils'
 import commonState, { type InitState as CommonState } from '@/store/common/state'
 import { createStyle } from '@/utils/tools'
-import LinearGradient from '@/components/common/LinearGradient'
-// import { useTheme } from '@/store/theme/hook'
-
-// 播放页Salt Player风格暗色渐变背景
-const GRADIENT_COLORS = ['#000000', '#121212', '#1e1e1e', '#282828']
+import { useTheme } from '@/store/theme/hook'
 
 const LyricPage = ({ activeIndex }: { activeIndex: number }) => {
   const initedRef = useRef(false)
@@ -33,7 +29,7 @@ const LyricPage = ({ activeIndex }: { activeIndex: number }) => {
 
 // global.iskeep = false
 export default memo(({ componentId }: { componentId: string }) => {
-  // const theme = useTheme()
+  const theme = useTheme()
   const [pageIndex, setPageIndex] = useState(0)
   const showLyricRef = useRef(false)
 
@@ -75,7 +71,7 @@ export default memo(({ componentId }: { componentId: string }) => {
   }, [])
 
   return (
-    <LinearGradient colors={GRADIENT_COLORS} style={styles.container}>
+    <View style={{ ...styles.container, backgroundColor: theme['c-main-background'] }}>
       <Header />
       <View style={styles.content}>
         <PagerView
@@ -92,7 +88,7 @@ export default memo(({ componentId }: { componentId: string }) => {
         </PagerView>
         <Player />
       </View>
-    </LinearGradient>
+    </View>
   )
 })
 

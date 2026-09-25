@@ -19,11 +19,12 @@ export const HEADER_HEIGHT = scaleSizeH(_HEADER_HEIGHT)
 
 const Title = () => {
   const musicInfo = usePlayerMusicInfo()
+  const theme = useTheme()
 
   return (
     <View style={styles.titleContent}>
-      <Text numberOfLines={1} style={styles.title} color="rgba(255,255,255,0.95)">{musicInfo.name || '未播放'}</Text>
-      <Text numberOfLines={1} style={styles.title} size={12} color="rgba(255,255,255,0.6)">{musicInfo.singer}</Text>
+      <Text numberOfLines={1} style={styles.title} color={theme['c-font']}>{musicInfo.name || '未播放'}</Text>
+      <Text numberOfLines={1} style={styles.title} size={12} color={theme['c-sub-text']}>{musicInfo.singer}</Text>
     </View>
   )
 }
@@ -44,9 +45,9 @@ export default memo(() => {
     <View style={{ height: HEADER_HEIGHT + statusBarHeight, paddingTop: statusBarHeight }} nativeID={NAV_SHEAR_NATIVE_IDS.playDetail_header}>
       <StatusBar />
       <View style={styles.container}>
-        <Btn icon="chevron-left" color="rgba(255,255,255,0.9)" onPress={back} />
+        <Btn icon="chevron-left" color={theme['c-font']} onPress={back} />
         <Title />
-        <Btn icon="slider" color="rgba(255,255,255,0.9)" onPress={showSetting} />
+        <Btn icon="slider" color={theme['c-font']} onPress={showSetting} />
       </View>
       <SettingPopup ref={popupRef} direction="vertical" />
     </View>

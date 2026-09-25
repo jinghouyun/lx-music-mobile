@@ -11,12 +11,14 @@ import Image from '@/components/common/Image'
 import { useStatusbarHeight } from '@/store/common/hook'
 import commonState from '@/store/common/state'
 import Text from '@/components/common/Text'
+import { useTheme } from '@/store/theme/hook'
 
 
 export default ({ componentId }: { componentId: string }) => {
   const musicInfo = usePlayerMusicInfo()
   const { width: winWidth, height: winHeight } = useWindowSize()
   const statusBarHeight = useStatusbarHeight()
+  const theme = useTheme()
 
   const [animated, setAnimated] = useState(!!commonState.componentIds.playDetail)
   const [pic, setPic] = useState(musicInfo.pic)
@@ -32,11 +34,11 @@ export default ({ componentId }: { componentId: string }) => {
   const album = musicInfo.album || (musicInfo as any)?.meta?.albumName || ''
 
   const style = useMemo(() => {
-    const imgWidth = Math.min(winWidth * 0.7, (winHeight - statusBarHeight - HEADER_HEIGHT) * 0.42)
+    const imgWidth = Math.min(winWidth * 0.75, (winHeight - statusBarHeight - HEADER_HEIGHT) * 0.42)
     return {
       width: imgWidth,
       height: imgWidth,
-      borderRadius: 24,
+      borderRadius: 28,
     }
   }, [statusBarHeight, winHeight, winWidth])
 
@@ -49,14 +51,9 @@ export default ({ componentId }: { componentId: string }) => {
         musicInfo.id
           ? (
               <View style={styles.info}>
-                <Text style={styles.infoTitle} numberOfLines={1} color="rgba(255,255,255,0.92)" size={13}>{musicInfo.name} - {musicInfo.singer}{album ? ` (${album})` : ''}</Text>
+                <Text style={styles.infoTitle} numberOfLines={1} color={theme['c-font']} size={15}>{musicInfo.name}</Text>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaItem} color="rgba(255,255,255,0.6)" size={11}>歌手：{musicInfo.singer}</Text>
-                  {
-                    album
-                      ? <Text style={styles.metaItem} color="rgba(255,255,255,0.6)" size={11}>专辑：{album}</Text>
-                      : null
-                  }
+                  <Text style={styles.metaItem} color={theme['c-sub-text']} size={12}>{musicInfo.singer}</Text>
                 </View>
               </View>
             )

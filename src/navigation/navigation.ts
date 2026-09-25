@@ -133,16 +133,16 @@ export function pushPlayDetailScreen(componentId: string, skipAnimation = false)
           statusBar: {
             drawBehind: true,
             visible: true,
-            // 播放页为红色渐变背景，固定浅色状态栏文字
-            style: 'light',
+            // 播放页浅色背景，深色状态栏文字
+            style: 'dark',
             backgroundColor: 'transparent',
           },
           navigationBar: {
             // visible: false,
-            backgroundColor: '#8f1c1c',
+            backgroundColor: theme['c-main-background'],
           },
           layout: {
-            componentBackgroundColor: '#5a1212',
+            componentBackgroundColor: theme['c-main-background'],
           },
           animations: {
             push: skipAnimation ? {} : {
@@ -186,13 +186,37 @@ export function pushPlayDetailScreen(componentId: string, skipAnimation = false)
               // },
             },
             pop: {
-              content: {
-                translationX: {
-                  from: 0,
-                  to: windowSizeTools.getSize().width,
-                  duration: 300,
+              sharedElementTransitions: [
+                {
+                  fromId: NAV_SHEAR_NATIVE_IDS.playDetail_pic,
+                  toId: NAV_SHEAR_NATIVE_IDS.playDetail_pic,
+                  interpolation: { type: 'spring' },
                 },
-              },
+              ],
+              elementTransitions: [
+                {
+                  id: NAV_SHEAR_NATIVE_IDS.playDetail_header,
+                  alpha: {
+                    to: 0,
+                    duration: 200,
+                  },
+                  translationY: {
+                    to: -32,
+                    duration: 200,
+                  },
+                },
+                {
+                  id: NAV_SHEAR_NATIVE_IDS.playDetail_player,
+                  alpha: {
+                    to: 0,
+                    duration: 200,
+                  },
+                  translationY: {
+                    to: 32,
+                    duration: 200,
+                  },
+                },
+              ],
             },
           },
         },
